@@ -72,9 +72,22 @@ Comment directives call `$builder->methodName(arg1, arg2)`:
 - `Ui.Button`  → `components/ui/button.html`
 - If the path is a directory, `component.html` inside it is used instead.
 
+### Load order rule
+
+**`<!--load::Dep-->` must come before any `<!--section::...-->`** in the same file.
+
+`load()` is blocked when a section is open because the dependency's own `section()` calls would auto-close the currently active section, corrupting the parent's output buffer. `<!--render::Dep-->` and `@render('Dep')` inside a section are safe — the output cache only echoes HTML and never opens new sections.
+
+```html
+<!--extends::Layout-->
+<!--load::Widgets.Card-->   ← load all deps first
+<!--section::content-->
+@render('Widgets.Card')     ← render inside a section is fine
+```
+
 ### `ModifierInterface`
 
-Implement `process(string $content): string` to transform a section's combined output (e.g. minify CSS). Pass an instance as the second argument to `renderSection()`.
+Implement `process(array $sections): string` where `$sections` is `['ComponentName' => 'content']`. Register on the `Template` instance via `addModifier(string $key, ModifierInterface)` and reference by key in component files: `@renderSectionBlock('style', 'css')`.
 
 ### `executeFile()` scoping
 
