@@ -20,7 +20,9 @@ $t = new Template(
 $t->set('name', 'World');
 $t->set('year', date('Y'));
 
-// render() calls load() automatically — you rarely need to call load() directly.
+// load() parses the component and registers its sections.
+// render() intentionally does not auto-load — always call load() first.
+$t->load('Greeting');
 $t->render('Greeting');
 
 // Errors (missing files, open sections, etc.) are collected silently and can

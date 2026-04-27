@@ -197,12 +197,17 @@ class Template
     }
 
     /**
-     * Load a component (if not already loaded) then include its compiled output
-     * cache into the output buffer. Pass $return = true to capture instead of echo.
+     * Render a previously loaded component into the output buffer.
+     * The component MUST be loaded first via load() — render() intentionally does
+     * not auto-load so that it is safe to call from inside a section buffer.
+     * Pass $return = true to capture the output instead of echoing it.
      */
     public function render(string $component, array $data = [], bool $return = false): ?string
     {
-        $this->load($component, $data);
+        if (!isset($this->loadedComponents[$component])) {
+            $this->sections['errors'][] = "render('{$component}') called but '{$component}' is not loaded";
+            return null;
+        }
 
         // Walk up the inheritance chain to find the root layout to render
         $renderTarget = $component;
@@ -223,22 +228,6 @@ class Template
 
         $this->executeFile($outputCache, $data);
         return null;
-    }
-
-    /**
-     * Render a component that has already been loaded by the current render tree.
-     * Called internally from compiled output templates via $builder->subrender().
-     */
-    public function subrender(string $component, array $data = []): void
-    {
-        if (!isset($this->loadedComponents[$component])) {
-            $this->sections['errors'][] = "'{$this->currentComponent}' tried to subrender '{$component}' which is not loaded";
-            return;
-        }
-        $outputCache = $this->cacheDir . "/{$component}.output.cache.php";
-        if (file_exists($outputCache)) {
-            $this->executeFile($outputCache, $data);
-        }
     }
 
     /**

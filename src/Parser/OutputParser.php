@@ -53,14 +53,14 @@ class OutputParser
         // <!--@render('Component')--> — comment form first so bare form doesn't double-match
         $content = (string) preg_replace_callback(
             '/<!--@render\((.+?)\)-->/s',
-            static fn(array $m): string => '<?php $builder->subrender(' . trim($m[1]) . '); ?>',
+            static fn(array $m): string => '<?php $builder->render(' . trim($m[1]) . '); ?>',
             $content
         );
 
         // @render('Component') — bare form
         $content = (string) preg_replace_callback(
             '/@render\((.+?)\)/s',
-            static fn(array $m): string => '<?php $builder->subrender(' . trim($m[1]) . '); ?>',
+            static fn(array $m): string => '<?php $builder->render(' . trim($m[1]) . '); ?>',
             $content
         );
 

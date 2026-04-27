@@ -72,15 +72,24 @@ Comment directives call `$builder->methodName(arg1, arg2)`:
 - `Ui.Button`  → `components/ui/button.html`
 - If the path is a directory, `component.html` inside it is used instead.
 
-### Load order rule
+### load() vs render()
 
-**`<!--load::Dep-->` must come before any `<!--section::...-->`** in the same file.
+`load()` and `render()` are intentionally separate steps:
 
-`load()` is blocked when a section is open because the dependency's own `section()` calls would auto-close the currently active section, corrupting the parent's output buffer. `<!--render::Dep-->` and `@render('Dep')` inside a section are safe — the output cache only echoes HTML and never opens new sections.
+- **`load($component)`** — parses the file, registers all sections, auto-loads parent layout if `<!--extends::-->` is present. Produces no output.
+- **`render($component)`** — includes the compiled output cache. **Does not call `load()`**. Fails with an error if the component has not been loaded yet.
+
+```php
+// Always load before render
+$t->load('Page');   // also auto-loads Layout via <!--extends::Layout-->
+$t->render('Page'); // renders Layout's output cache
+```
+
+**`<!--load::Dep-->` must come before any `<!--section::...-->`** in the same file. `load()` is blocked when a section is open because the dependency's own `section()` calls would auto-close the currently active section, corrupting the parent's buffer. `@render('Dep')` inside a section is safe — the output cache only echoes HTML and never opens new sections.
 
 ```html
 <!--extends::Layout-->
-<!--load::Widgets.Card-->   ← load all deps first
+<!--load::Widgets.Card-->   ← load all deps first, before any section
 <!--section::content-->
 @render('Widgets.Card')     ← render inside a section is fine
 ```

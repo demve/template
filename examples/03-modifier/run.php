@@ -20,6 +20,8 @@ $t = new Template(
 // no PHP class instantiation inside .html files.
 $t->addModifier('css', new CssMinifier());
 
+$t->load('Page');
+
 // Capture the full output so we can show it cleanly in the terminal.
 $html = (string) $t->render('Page', [], return: true);
 

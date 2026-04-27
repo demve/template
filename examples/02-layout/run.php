@@ -15,13 +15,9 @@ $t = new Template(
     cacheDir:      __DIR__ . '/cache'
 );
 
-// Rendering PageHome triggers:
-//   1. load('PageHome')  → registers its sections, then auto-loads Layout
-//   2. load('Layout')    → compiles its output section
-//   3. render()          → includes Layout's output cache (not PageHome's)
-//
-// PageHome's sections (title, content, style) are available inside Layout
-// via renderSection() and renderSectionBlock().
+// load() registers PageHome's sections and auto-loads Layout (via <!--extends::Layout-->).
+// render() then includes Layout's output cache — it never auto-loads.
+$t->load('PageHome');
 $t->render('PageHome');
 
 $t->consoleErrors();

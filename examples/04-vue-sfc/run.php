@@ -18,5 +18,6 @@ $t = new Template(
     cacheDir:      __DIR__ . '/cache'
 );
 
+$t->load('App');
 $t->render('App');
 $t->consoleErrors();

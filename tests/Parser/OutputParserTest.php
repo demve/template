@@ -43,13 +43,13 @@ class OutputParserTest extends TestCase
     public function test_compiles_render_bare(): void
     {
         $output = $this->parser->compile("@render('Widget')");
-        $this->assertStringContainsString("\$builder->subrender('Widget')", $output);
+        $this->assertStringContainsString("\$builder->render('Widget')", $output);
     }
 
     public function test_compiles_render_comment_form(): void
     {
         $output = $this->parser->compile("<!--@render('Widget')-->");
-        $this->assertStringContainsString("\$builder->subrender('Widget')", $output);
+        $this->assertStringContainsString("\$builder->render('Widget')", $output);
     }
 
     public function test_compiles_render_section(): void

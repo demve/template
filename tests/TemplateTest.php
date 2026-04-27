@@ -74,6 +74,14 @@ class TemplateTest extends TestCase
         $this->assertSame('Hello', trim((string) ob_get_clean()));
     }
 
+    public function test_render_without_load_adds_error(): void
+    {
+        $t = $this->makeTemplate();
+        $result = $t->render('NotLoaded');
+        $this->assertNull($result);
+        $this->assertNotEmpty($t->getErrors());
+    }
+
     public function test_layout_inheritance_renders_layout_output(): void
     {
         // Layout: wraps content slot in a <main> tag
@@ -92,6 +100,7 @@ class TemplateTest extends TestCase
         );
 
         $t = $this->makeTemplate();
+        $t->load('Page');
         $output = trim((string) $t->render('Page', [], true));
         $this->assertSame('<main>Hello World</main>', $output);
     }
@@ -111,6 +120,7 @@ class TemplateTest extends TestCase
         );
 
         $t = $this->makeTemplate();
+        $t->load('About');
         $output = trim((string) $t->render('About', [], true));
         $this->assertSame('<title>My App</title>', $output);
     }
