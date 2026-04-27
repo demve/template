@@ -2,3 +2,5 @@
 /draft/
 composer.lock
 examples/*/cache/
+.claude/settings.local.json
+.phpunit.result.cache
