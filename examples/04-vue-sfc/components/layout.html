@@ -1,0 +1,49 @@
+<!--section::output-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>@renderSection('title', 'App')</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body   { font-family: system-ui, sans-serif; background: #f8fafc; color: #1e293b; }
+    nav    { display: flex; gap: 1rem; padding: 1rem 2rem; background: #1e293b; }
+    nav a  { color: #94a3b8; text-decoration: none; padding: .35rem .75rem; border-radius: 4px; }
+    nav a:hover, nav a.active { background: #4f46e5; color: #fff; }
+    #app   { min-height: calc(100vh - 52px); }
+  </style>
+
+  <!--
+    All <style> blocks from every loaded component land here.
+    renderSectionBlock collects them in load order and outputs them together.
+    Pass a CssMinifier (see example 03) to minify the combined output.
+  -->
+  @renderSectionBlock('style')
+
+</head>
+<body>
+
+  <nav>
+    <a href="#login">Login</a>
+    <a href="#dashboard">Dashboard</a>
+  </nav>
+
+  <!-- The active view template is injected here by the JS router below -->
+  <div id="app"></div>
+
+  <!--
+    All <script type="text/template"> blocks from every loaded component.
+    They are hidden from the user but available to the JS router via getElementById.
+  -->
+  @renderSectionBlock('template')
+
+  <!--
+    All <script> blocks from every loaded component, in load order.
+    Each component's JS runs after its template is in the DOM.
+  -->
+  @renderSectionBlock('script')
+
+  @renderSectionBlock('console_errors')
+
+</body>
+</html>

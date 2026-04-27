@@ -11,18 +11,18 @@ Home Page
 <!--section::content-->
 
 <!--
-  <!--load::Widgets.Card--> calls $builder->load("Widgets.Card") which
+  <!--load::widgetsCard--> calls $builder->load("widgetsCard") which
   loads another component and registers its sections too.
-  After load, use @render('Widgets.Card') inside the output to place it.
+  After load, use @render('widgetsCard') inside the output to place it.
 -->
-<!--load::Widgets.Card-->
+<!--load::widgetsCard-->
 
 <div class="hero">
   <h1>Welcome home</h1>
   <p>This page extends Layout, which wraps all content.</p>
 </div>
 
-@render('Widgets.Card')
+<!--render::widgetsCard-->
 
 <!--section::script-->
 <script>

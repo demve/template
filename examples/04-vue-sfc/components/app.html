@@ -1,0 +1,37 @@
+<!--extends::Layout-->
+
+<!--
+  Loading a component registers ALL of its sections (style, template, script)
+  into the global section collector. No output happens here — sections are only
+  rendered when the layout calls renderSectionBlock() for each one.
+-->
+<!--load::Views.Login-->
+<!--load::Views.Dashboard-->
+
+<!--section::title-->
+Vue-SFC Example
+
+<!--
+  App-level script: a minimal hash router that reads the URL fragment and
+  swaps in the matching <script type="text/template"> block.
+  Each view's template has id="view-{name}" so the router can find it.
+-->
+<!--section::script-->
+<script>
+  function navigate() {
+    var name = location.hash.replace('#', '') || 'login';
+
+    // Mark the active nav link
+    document.querySelectorAll('nav a').forEach(function (a) {
+      a.classList.toggle('active', a.getAttribute('href') === '#' + name);
+    });
+
+    var tpl = document.getElementById('view-' + name);
+    document.getElementById('app').innerHTML = tpl
+      ? tpl.innerHTML
+      : '<p style="padding:2rem">View not found: ' + name + '</p>';
+  }
+
+  window.addEventListener('hashchange', navigate);
+  navigate();
+</script>
