@@ -71,10 +71,24 @@ class OutputParser
             $content
         );
 
-        // @renderSection('key') — bare form
+        // @renderSection('key') / @renderSection('key', 'default') — bare form
         $content = (string) preg_replace_callback(
             '/@renderSection\((.+?)\)/s',
             static fn(array $m): string => '<?php $builder->renderSection(' . trim($m[1]) . '); ?>',
+            $content
+        );
+
+        // <!--@renderSectionBlock('key')--> — comment form
+        $content = (string) preg_replace_callback(
+            '/<!--@renderSectionBlock\((.+?)\)-->/s',
+            static fn(array $m): string => '<?php $builder->renderSectionBlock(' . trim($m[1]) . '); ?>',
+            $content
+        );
+
+        // @renderSectionBlock('key') — bare form
+        $content = (string) preg_replace_callback(
+            '/@renderSectionBlock\((.+?)\)/s',
+            static fn(array $m): string => '<?php $builder->renderSectionBlock(' . trim($m[1]) . '); ?>',
             $content
         );
 

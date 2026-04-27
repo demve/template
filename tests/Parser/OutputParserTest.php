@@ -54,8 +54,26 @@ class OutputParserTest extends TestCase
 
     public function test_compiles_render_section(): void
     {
-        $output = $this->parser->compile("@renderSection('styles')");
-        $this->assertStringContainsString("\$builder->renderSection('styles')", $output);
+        $output = $this->parser->compile("@renderSection('content')");
+        $this->assertStringContainsString("\$builder->renderSection('content')", $output);
+    }
+
+    public function test_compiles_render_section_with_default(): void
+    {
+        $output = $this->parser->compile("@renderSection('title', 'My App')");
+        $this->assertStringContainsString("\$builder->renderSection('title', 'My App')", $output);
+    }
+
+    public function test_compiles_render_section_block_bare(): void
+    {
+        $output = $this->parser->compile("@renderSectionBlock('style')");
+        $this->assertStringContainsString("\$builder->renderSectionBlock('style')", $output);
+    }
+
+    public function test_compiles_render_section_block_comment_form(): void
+    {
+        $output = $this->parser->compile("<!--@renderSectionBlock('style')-->");
+        $this->assertStringContainsString("\$builder->renderSectionBlock('style')", $output);
     }
 
     public function test_compiles_foreach(): void

@@ -25,6 +25,9 @@ class Template
     /** @var array<string, true> */
     private array $loadedComponents = [];
 
+    /** @var array<string, string> extendsMap['Child'] = 'Layout' */
+    private array $extendsMap = [];
+
     private string $currentComponent     = '__root__';
     private ?string $currentComponentFile = null;
 
@@ -106,9 +109,6 @@ class Template
         }
         $this->currentSection = $name;
         ob_start();
-        if ($this->currentComponentFile !== null && $name !== 'output') {
-            echo "\n<!-- File:{$this->currentComponentFile} - Section:{$name} -->\n";
-        }
     }
 
     public function sectionStop(): void
@@ -177,6 +177,11 @@ class Template
         $this->executeFile($loadCache, $data);
         $this->sectionStop();
 
+        // After child sections are captured, auto-load its parent layout (if any)
+        if (isset($this->extendsMap[$component])) {
+            $this->load($this->extendsMap[$component], $data);
+        }
+
         // Pop context
         $this->currentComponent     = $parentComponent;
         $this->currentComponentFile = $parentFile;
@@ -190,7 +195,13 @@ class Template
     {
         $this->load($component, $data);
 
-        $outputCache = $this->cacheDir . "/{$component}.output.cache.php";
+        // Walk up the inheritance chain to find the root layout to render
+        $renderTarget = $component;
+        while (isset($this->extendsMap[$renderTarget])) {
+            $renderTarget = $this->extendsMap[$renderTarget];
+        }
+
+        $outputCache = $this->cacheDir . "/{$renderTarget}.output.cache.php";
         if (!file_exists($outputCache)) {
             return null;
         }
@@ -222,20 +233,49 @@ class Template
     }
 
     /**
-     * Concatenate all items registered under $section, optionally transform the
-     * combined string through a ModifierInterface (e.g. a CSS/JS minifier), then echo.
+     * Render a simple named slot — echoes the section's combined content, or $default
+     * when nothing was registered. Intended for single-value layout slots (title, content…).
      */
-    public function renderSection(string $section, ?ModifierInterface $modifier = null): void
+    public function renderSection(string $section, string $default = ''): void
+    {
+        $items = $this->sectionGet($section);
+        echo $items !== [] ? implode("\n", $items) : $default;
+    }
+
+    /**
+     * Render a multi-item block section (CSS, JS arrays, console errors), optionally
+     * transforming the combined output through a ModifierInterface (e.g. a minifier).
+     */
+    public function renderSectionBlock(string $section, ?ModifierInterface $modifier = null): void
     {
         if ($section === 'console_errors') {
             $this->consoleErrors();
             return;
         }
-        $combined = implode("\n", $this->sectionGet($section));
+        // Annotate each item with its origin for CSS/JS debugging
+        $parts = [];
+        foreach ($this->sectionGet($section) as $component => $content) {
+            $parts[] = "\n/* {$component} */\n" . $content;
+        }
+        $combined = implode("\n", $parts);
         if ($modifier !== null) {
             $combined = $modifier->process($combined);
         }
         echo $combined;
+    }
+
+    /**
+     * Register that $currentComponent extends $layout.
+     * Called from load-cache files via <!--extends::Layout-->.
+     * Must be called before any section() opens.
+     */
+    public function extends(string $layout): void
+    {
+        if ($this->currentSection !== null) {
+            $this->sections['errors'][] = "'{$this->currentComponent}' called extends() inside an open section '{$this->currentSection}'";
+            return;
+        }
+        $this->extendsMap[$this->currentComponent] = $layout;
     }
 
     // -------------------------------------------------------------------------

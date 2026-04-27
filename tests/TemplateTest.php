@@ -51,6 +51,69 @@ class TemplateTest extends TestCase
         $this->assertEmpty($t->getErrors());
     }
 
+    public function test_render_section_returns_default_when_empty(): void
+    {
+        $t = $this->makeTemplate();
+        ob_start();
+        $t->renderSection('missing', 'fallback');
+        $this->assertSame('fallback', ob_get_clean());
+    }
+
+    public function test_render_section_echoes_registered_content(): void
+    {
+        file_put_contents(
+            $this->tmp . '/components/page.html',
+            '<?php $builder->section("title"); ?>Hello<?php $builder->sectionStop(); ?>'
+            . '<?php $builder->section("output"); ?>body<?php $builder->sectionStop(); ?>'
+        );
+        $t = $this->makeTemplate();
+        $t->load('Page');
+        ob_start();
+        $t->renderSection('title', 'Default Title');
+        $this->assertSame('Hello', trim((string) ob_get_clean()));
+    }
+
+    public function test_layout_inheritance_renders_layout_output(): void
+    {
+        // Layout: wraps content slot in a <main> tag
+        file_put_contents(
+            $this->tmp . '/components/layout.html',
+            '<?php $builder->section("output"); ?>'
+            . '<main><?php $builder->renderSection("content"); ?></main>'
+            . '<?php $builder->sectionStop(); ?>'
+        );
+
+        // Page: extends Layout, fills content slot
+        file_put_contents(
+            $this->tmp . '/components/page.html',
+            '<?php $builder->extends("Layout"); ?>'
+            . '<?php $builder->section("content"); ?>Hello World<?php $builder->sectionStop(); ?>'
+        );
+
+        $t = $this->makeTemplate();
+        $output = trim((string) $t->render('Page', [], true));
+        $this->assertSame('<main>Hello World</main>', $output);
+    }
+
+    public function test_layout_inheritance_title_slot_with_default(): void
+    {
+        file_put_contents(
+            $this->tmp . '/components/base.html',
+            '<?php $builder->section("output"); ?>'
+            . '<title><?php $builder->renderSection("title", "My App"); ?></title>'
+            . '<?php $builder->sectionStop(); ?>'
+        );
+        file_put_contents(
+            $this->tmp . '/components/about.html',
+            '<?php $builder->extends("Base"); ?>'
+            // no title section — should fall back to default
+        );
+
+        $t = $this->makeTemplate();
+        $output = trim((string) $t->render('About', [], true));
+        $this->assertSame('<title>My App</title>', $output);
+    }
+
     // -------------------------------------------------------------------------
 
     private function makeTemplate(): Template
