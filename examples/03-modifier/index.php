@@ -26,38 +26,46 @@
 <h2>The contract</h2>
 <pre><code>interface ModifierInterface
 {
-    public function process(string $content): string;
+    // $sections is ['ComponentName' => 'content', ...]
+    public function process(array $sections): string;
 }</code></pre>
 <p>
-  One method. Input: the concatenated section content from all loaded components.
-  Output: whatever you want rendered — minified CSS, bundled JS, a hash, anything.
+  The modifier receives the <strong>raw sections array</strong> keyed by component name.
+  It decides how to combine and transform them — the library never concatenates for you.
+  Output: whatever string you want rendered.
 </p>
 
 <h2>Example: CSS minifier</h2>
 <pre><code>class CssMinifier implements ModifierInterface
 {
-    public function process(string $content): string
+    public function process(array $sections): string
     {
-        $content = preg_replace('/\/\*.*?\*\//s', '', $content);  // strip comments
-        $content = preg_replace('/\s+/', ' ', $content);           // collapse whitespace
-        $content = preg_replace('/\s*([{}:;,])\s*/', '$1', $content);
-        return trim($content);
+        $combined = implode("\n", $sections);  // combine first
+        $combined = preg_replace('/\/\*.*?\*\//s', '', $combined);
+        $combined = preg_replace('/\s+/', ' ', $combined);
+        $combined = preg_replace('/\s*([{}:;,])\s*/', '$1', $combined);
+        return trim($combined);
     }
 }</code></pre>
 
-<h2>Using it in a layout</h2>
-<pre><code>&lt;style&gt;@renderSectionBlock('style', new CssMinifier())&lt;/style&gt;</code></pre>
+<h2>Registering and using a modifier</h2>
+<pre><code>// run.php — register once by key
+$t->addModifier('css', new CssMinifier());
+$t->addModifier('js',  new JsMinifier());</code></pre>
+<pre><code>&lt;!-- layout.html — reference by key, no PHP instantiation in component files --&gt;
+&lt;style&gt;@renderSectionBlock('style', 'css')&lt;/style&gt;
+&lt;script&gt;@renderSectionBlock('script', 'js')&lt;/script&gt;</code></pre>
 <p>
-  The modifier runs <strong>once</strong> on the full combined CSS — not once per component.
-  This means it can see across component boundaries, which matters for minifiers that
-  strip redundant selectors or for tools that generate source maps.
+  The modifier key is a plain string inside the component file.
+  This keeps <code>.html</code> files free of PHP class names and makes it easy to swap
+  implementations (e.g. switch from a regex minifier to a proper parser) without touching templates.
+  If the key is not registered the section falls back to a plain <code>implode("\n")</code>.
 </p>
 
 <div class="note">
-  <strong>Recommended pattern:</strong> instantiate modifiers outside the template and
-  pass them in via <code>$data</code>, or register them on the <code>Template</code>
-  instance, rather than using <code>new CssMinifier()</code> inside the component file.
-  That keeps component files free of PHP class instantiation.
+  <strong>Receiving the array matters:</strong> a modifier that gets the array can annotate
+  each item with its origin, reorder by specificity, deduplicate, or generate source maps.
+  A modifier that only got a combined string would have lost that information.
 </div>
 
 <h2>Other uses</h2>

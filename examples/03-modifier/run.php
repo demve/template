@@ -16,6 +16,10 @@ $t = new Template(
     cacheDir:      __DIR__ . '/cache'
 );
 
+// Register modifiers by key. Component files reference them by name —
+// no PHP class instantiation inside .html files.
+$t->addModifier('css', new CssMinifier());
+
 // Capture the full output so we can show it cleanly in the terminal.
 $html = (string) $t->render('Page', [], return: true);
 

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Demeve\Template\Tests;
 
+use Demeve\Template\ModifierInterface;
 use Demeve\Template\Template;
 use PHPUnit\Framework\TestCase;
 
@@ -112,6 +113,60 @@ class TemplateTest extends TestCase
         $t = $this->makeTemplate();
         $output = trim((string) $t->render('About', [], true));
         $this->assertSame('<title>My App</title>', $output);
+    }
+
+    public function test_render_section_block_implodes_without_modifier(): void
+    {
+        file_put_contents(
+            $this->tmp . '/components/a.html',
+            '<?php $builder->section("style"); ?>a<?php $builder->sectionStop(); ?>'
+        );
+        file_put_contents(
+            $this->tmp . '/components/b.html',
+            '<?php $builder->section("style"); ?>b<?php $builder->sectionStop(); ?>'
+        );
+        $t = $this->makeTemplate();
+        $t->load('A');
+        $t->load('B');
+        ob_start();
+        $t->renderSectionBlock('style');
+        $this->assertSame("a\nb", trim((string) ob_get_clean()));
+    }
+
+    public function test_render_section_block_calls_registered_modifier(): void
+    {
+        file_put_contents(
+            $this->tmp . '/components/widget.html',
+            '<?php $builder->section("style"); ?>  raw css  <?php $builder->sectionStop(); ?>'
+        );
+
+        $modifier = new class implements ModifierInterface {
+            public function process(array $sections): string
+            {
+                return strtoupper(implode('|', $sections));
+            }
+        };
+
+        $t = $this->makeTemplate();
+        $t->addModifier('upper', $modifier);
+        $t->load('Widget');
+
+        ob_start();
+        $t->renderSectionBlock('style', 'upper');
+        $this->assertSame('RAW CSS', (string) ob_get_clean()); // sectionStop() trims content
+    }
+
+    public function test_render_section_block_falls_back_to_implode_for_unknown_key(): void
+    {
+        file_put_contents(
+            $this->tmp . '/components/widget.html',
+            '<?php $builder->section("style"); ?>css<?php $builder->sectionStop(); ?>'
+        );
+        $t = $this->makeTemplate();
+        $t->load('Widget');
+        ob_start();
+        $t->renderSectionBlock('style', 'nonexistent');
+        $this->assertSame('css', trim((string) ob_get_clean()));
     }
 
     // -------------------------------------------------------------------------

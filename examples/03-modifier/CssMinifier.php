@@ -9,15 +9,17 @@ use Demeve\Template\ModifierInterface;
 
 class CssMinifier implements ModifierInterface
 {
-    public function process(string $content): string
+    public function process(array $sections): string
     {
-        // Remove /* block comments */
-        $content = (string) preg_replace('/\/\*.*?\*\//s', '', $content);
-        // Collapse runs of whitespace to a single space
-        $content = (string) preg_replace('/\s+/', ' ', $content);
-        // Remove spaces around structural characters
-        $content = (string) preg_replace('/\s*([{}:;,>~+])\s*/', '$1', $content);
+        $combined = implode("\n", $sections);
 
-        return trim($content);
+        // Remove /* block comments */
+        $combined = (string) preg_replace('/\/\*.*?\*\//s', '', $combined);
+        // Collapse runs of whitespace to a single space
+        $combined = (string) preg_replace('/\s+/', ' ', $combined);
+        // Remove spaces around structural characters
+        $combined = (string) preg_replace('/\s*([{}:;,>~+])\s*/', '$1', $combined);
+
+        return trim($combined);
     }
 }

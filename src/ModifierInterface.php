@@ -6,5 +6,11 @@ namespace Demeve\Template;
 
 interface ModifierInterface
 {
-    public function process(string $content): string;
+    /**
+     * Receive all items of a section as an associative array
+     * (ComponentName => content) and return the combined output string.
+     *
+     * @param array<string, string> $sections
+     */
+    public function process(array $sections): string;
 }

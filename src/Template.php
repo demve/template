@@ -31,6 +31,9 @@ class Template
     private string $currentComponent     = '__root__';
     private ?string $currentComponentFile = null;
 
+    /** @var array<string, ModifierInterface> */
+    private array $modifiers = [];
+
     private ContentParser $contentParser;
     private OutputParser $outputParser;
 
@@ -77,6 +80,12 @@ class Template
     public function setPublicUrl(string $url): static
     {
         $this->publicUrl = rtrim($url, '/');
+        return $this;
+    }
+
+    public function addModifier(string $key, ModifierInterface $modifier): static
+    {
+        $this->modifiers[$key] = $modifier;
         return $this;
     }
 
@@ -243,25 +252,25 @@ class Template
     }
 
     /**
-     * Render a multi-item block section (CSS, JS arrays, console errors), optionally
-     * transforming the combined output through a ModifierInterface (e.g. a minifier).
+     * Render a multi-item block section (CSS, JS, HTML templates, etc.).
+     *
+     * $modifierKey refers to a modifier registered via addModifier(). The modifier
+     * receives the raw sections array (ComponentName => content) and is responsible
+     * for combining and transforming it into the final output string.
+     * When no modifier is registered for the key (or key is null), items are joined with "\n".
      */
-    public function renderSectionBlock(string $section, ?ModifierInterface $modifier = null): void
+    public function renderSectionBlock(string $section, ?string $modifierKey = null): void
     {
         if ($section === 'console_errors') {
             $this->consoleErrors();
             return;
         }
-        // Annotate each item with its origin for CSS/JS debugging
-        $parts = [];
-        foreach ($this->sectionGet($section) as $component => $content) {
-            $parts[] = "\n/* {$component} */\n" . $content;
+        $sections = $this->sectionGet($section);
+        if ($modifierKey !== null && isset($this->modifiers[$modifierKey])) {
+            echo $this->modifiers[$modifierKey]->process($sections);
+        } else {
+            echo implode("\n", $sections);
         }
-        $combined = implode("\n", $parts);
-        if ($modifier !== null) {
-            $combined = $modifier->process($combined);
-        }
-        echo $combined;
     }
 
     /**
