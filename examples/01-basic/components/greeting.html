@@ -1,0 +1,18 @@
+<!--section::output-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Basic Example</title>
+</head>
+<body>
+
+  <!--
+    <!--print::name--> calls $builder->print("name") which echoes $builder->get("name").
+    Use <%$var%> for variables that come from $data passed to render().
+  -->
+  <h1>Hello, <!--print::name-->!</h1>
+  <p>&copy; <!--print::year--></p>
+
+</body>
+</html>

@@ -1,0 +1,42 @@
+<!--section::output-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+
+  <!--
+    renderSection('title', 'My App') renders the child's "title" section.
+    The second argument is the default shown when no child fills the slot.
+  -->
+  <title>@renderSection('title', 'My App')</title>
+
+  <!--
+    renderSectionBlock('style') collects <style> blocks from ALL loaded
+    components and outputs them together — each annotated with its origin.
+    Pass a ModifierInterface to minify (see example 03).
+  -->
+  @renderSectionBlock('style')
+
+</head>
+<body>
+
+  <nav><a href="/">Home</a></nav>
+
+  <main>
+    <!--
+      renderSection('content') is the primary page slot.
+      No default — pages are expected to always fill it.
+    -->
+    @renderSection('content')
+  </main>
+
+  @renderSectionBlock('script')
+
+  <!--
+    Flush any runtime errors (missing components, bad loads) to the
+    browser console. Remove in production.
+  -->
+  @renderSectionBlock('console_errors')
+
+</body>
+</html>

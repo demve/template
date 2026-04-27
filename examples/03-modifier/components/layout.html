@@ -1,0 +1,20 @@
+<!--section::output-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>@renderSection('title', 'Modifier Demo')</title>
+
+  <!--
+    Pass a CssMinifier instance to renderSectionBlock.
+    The modifier receives the combined CSS from all components as one string
+    and returns the processed result — one minification pass for everything.
+  -->
+  <style>@renderSectionBlock('style', new CssMinifier())</style>
+
+</head>
+<body>
+  @renderSection('content')
+  @renderSectionBlock('console_errors')
+</body>
+</html>
