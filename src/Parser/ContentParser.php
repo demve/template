@@ -16,7 +16,7 @@ class ContentParser
     public function parse(string $content, string $component): string
     {
         $content = str_replace(
-            ['</dmv_template', '<dmv_template', '__self'],
+            ['</dmv-template', '<dmv-template', '__self'],
             ['</script', "<script type='text/template' id='template-{$component}'", $component],
             $content
         );
