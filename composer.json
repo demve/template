@@ -3,6 +3,15 @@
     "description": "A PHP library to load and render view files split into named sections (output, style, script, etc.).",
     "type": "library",
     "license": "MIT",
+    "authors": [
+        {
+            "name": "Diego Mont",
+            "email": "diegomontt@gmail.com",
+            "role": "Developer"
+        }
+    ],
+    "keywords": ["template", "view", "component", "sfc", "html", "sections"],
+    "homepage": "https://github.com/demve/template",
     "require": {
         "php": "^8.1"
     },
