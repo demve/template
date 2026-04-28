@@ -3,22 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <title>04 – Vue SFC Pattern</title>
-  <style>
-    body  { font-family: sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; color: #222; }
-    h1    { border-bottom: 2px solid #4f46e5; padding-bottom: .4rem; }
-    h2    { margin-top: 2rem; color: #4f46e5; }
-    pre   { background: #f5f5f5; border-left: 4px solid #4f46e5; padding: 1rem; overflow-x: auto; border-radius: 4px; font-size: .85rem; }
-    code  { font-family: monospace; font-size: .9rem; background: #f0f0f0; padding: .1rem .3rem; border-radius: 3px; }
-    iframe { width: 100%; height: 480px; border: 1px solid #ddd; border-radius: 6px; margin-top: 1rem; }
-    .note { background: #fffbe6; border-left: 4px solid #f59e0b; padding: .75rem 1rem; border-radius: 4px; margin: 1rem 0; }
-    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0; }
-    .card { border: 1px solid #e2e8f0; border-radius: 8px; padding: 1rem; }
-    .card h3 { margin: 0 0 .5rem; font-size: .95rem; color: #4f46e5; }
-    .card p  { margin: 0; font-size: .875rem; color: #475569; }
-    table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: .9rem; }
-    th, td { text-align: left; padding: .5rem .75rem; border: 1px solid #e2e8f0; }
-    th { background: #f8fafc; }
-  </style>
+  <link rel="stylesheet" href="../shared.css">
 </head>
 <body>
 
@@ -105,7 +90,7 @@ navigate();</code></pre>
 
 <h2>Result — use the nav links to switch views</h2>
 
-<iframe src="run.php" title="Vue SFC pattern output"></iframe>
+<iframe src="run.php" title="Vue SFC pattern output" style="height:480px"></iframe>
 
 </body>
 </html>
