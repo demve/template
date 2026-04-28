@@ -3,18 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <title>02 – Layout Inheritance</title>
-  <style>
-    body  { font-family: sans-serif; max-width: 860px; margin: 2rem auto; padding: 0 1rem; color: #222; }
-    h1    { border-bottom: 2px solid #4f46e5; padding-bottom: .4rem; }
-    h2    { margin-top: 2rem; color: #4f46e5; }
-    pre   { background: #f5f5f5; border-left: 4px solid #4f46e5; padding: 1rem; overflow-x: auto; border-radius: 4px; }
-    code  { font-family: monospace; font-size: .9rem; }
-    iframe { width: 100%; height: 320px; border: 1px solid #ddd; border-radius: 6px; margin-top: 1rem; }
-    .note { background: #fffbe6; border-left: 4px solid #f59e0b; padding: .75rem 1rem; border-radius: 4px; }
-    .flow { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; margin: 1rem 0; }
-    .box  { background: #ede9fe; border: 1px solid #4f46e5; border-radius: 6px; padding: .5rem 1rem; font-family: monospace; }
-    .arr  { font-size: 1.4rem; color: #6b7280; }
-  </style>
+  <link rel="stylesheet" href="../shared.css">
 </head>
 <body>
 
@@ -72,24 +61,24 @@ Home Page
   &lt;/body&gt;
 &lt;/html&gt;</code></pre>
 
-<table style="border-collapse:collapse;width:100%;margin-top:.5rem">
-  <tr style="background:#f5f5f5">
-    <th style="text-align:left;padding:.5rem;border:1px solid #ddd">Method</th>
-    <th style="text-align:left;padding:.5rem;border:1px solid #ddd">Use for</th>
-    <th style="text-align:left;padding:.5rem;border:1px solid #ddd">Supports default?</th>
-    <th style="text-align:left;padding:.5rem;border:1px solid #ddd">Supports modifier?</th>
+<table>
+  <tr>
+    <th>Method</th>
+    <th>Use for</th>
+    <th>Supports default?</th>
+    <th>Supports modifier?</th>
   </tr>
   <tr>
-    <td style="padding:.5rem;border:1px solid #ddd"><code>renderSection($slot, $default)</code></td>
-    <td style="padding:.5rem;border:1px solid #ddd">title, content, single values</td>
-    <td style="padding:.5rem;border:1px solid #ddd">✓</td>
-    <td style="padding:.5rem;border:1px solid #ddd">✗</td>
+    <td><code>renderSection($slot, $default)</code></td>
+    <td>title, content, single values</td>
+    <td>✓</td>
+    <td>✗</td>
   </tr>
   <tr>
-    <td style="padding:.5rem;border:1px solid #ddd"><code>renderSectionBlock($slot, $modifier)</code></td>
-    <td style="padding:.5rem;border:1px solid #ddd">style, script, css/js arrays</td>
-    <td style="padding:.5rem;border:1px solid #ddd">✗</td>
-    <td style="padding:.5rem;border:1px solid #ddd">✓</td>
+    <td><code>renderSectionBlock($slot, $modifier)</code></td>
+    <td>style, script, css/js arrays</td>
+    <td>✗</td>
+    <td>✓</td>
   </tr>
 </table>
 
@@ -111,7 +100,7 @@ Home Page
 
 <h2>Result</h2>
 
-<iframe src="run.php" title="Layout inheritance output"></iframe>
+<iframe src="run.php" title="Layout inheritance output" style="height:320px"></iframe>
 
 </body>
 </html>
