@@ -40,6 +40,22 @@ class TemplateTest extends TestCase
         $this->assertNotEmpty($t->getErrors());
     }
 
+    public function test_load_inside_open_section_throws(): void
+    {
+        file_put_contents(
+            $this->tmp . '/components/dep.html',
+            '<?php $builder->section("output"); ?>dep<?php $builder->sectionStop(); ?>'
+        );
+        // Simulate a load-cache file that calls load() while a section is open
+        file_put_contents(
+            $this->tmp . '/components/bad.html',
+            '<?php $builder->section("content"); ?><?php $builder->load("Dep"); ?><?php $builder->sectionStop(); ?>'
+        );
+        $t = $this->makeTemplate();
+        $this->expectException(\LogicException::class);
+        $t->load('Bad');
+    }
+
     public function test_load_valid_component_is_idempotent(): void
     {
         file_put_contents(
