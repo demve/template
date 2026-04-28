@@ -49,13 +49,37 @@ Comments are used so IDEs can still highlight and format the HTML normally.
 <style> ... </style>
 <!--section::output-->
 <div>
-  <%$title%>              <!-- HTML-escaped echo -->
-  <%%$rawHtml%%>          <!-- raw echo -->
-  @echo($value)           <!-- HTML-escaped echo (alternate) -->
-  @render('OtherComponent')
-  @renderSection('style')
-  @foreach($items as $i) { <li><%$i%></li> }@endforeach
-  @php $x = 1; @endphp
+  <%$title%>                                      <!-- HTML-escaped echo -->
+  <%%$rawHtml%%>                                  <!-- raw echo -->
+
+  <dmv-php>$x = $builder->get('key');</dmv-php>           <!-- PHP block -->
+
+  <dmv-if test="$x > 0">yes<dmv-else>no</dmv-if>
+  <dmv-if test="$x === 'admin'">
+    admin
+  <dmv-elseif test="$x === 'editor'">
+    editor
+  <dmv-else>
+    guest
+  </dmv-if>
+
+  <dmv-foreach on="$items as $i => $v">
+    <li><%$v%></li>
+  </dmv-foreach>
+
+  <dmv-for expr="$i = 1; $i <= 5; $i++">
+    <span><%$i%></span>
+  </dmv-for>
+
+  <dmv-while test="$n < 10">
+    <%$n%><dmv-php>$n++;</dmv-php>
+  </dmv-while>
+
+  <render component="OtherComponent" />
+  <renderSection name="content" />
+  <renderSection name="title" default="My App" />
+  <renderSectionBlock name="style" />
+  <renderSectionBlock name="style" modifier="css" />
 </div>
 ```
 
@@ -85,18 +109,18 @@ $t->load('Page');   // also auto-loads Layout via <!--extends::Layout-->
 $t->render('Page'); // renders Layout's output cache
 ```
 
-**`<!--load::Dep-->` must come before any `<!--section::...-->`** in the same file. `load()` is blocked when a section is open because the dependency's own `section()` calls would auto-close the currently active section, corrupting the parent's buffer. `@render('Dep')` inside a section is safe — the output cache only echoes HTML and never opens new sections.
+**`<!--load::Dep-->` must come before any `<!--section::...-->`** in the same file. `load()` is blocked when a section is open because the dependency's own `section()` calls would auto-close the currently active section, corrupting the parent's buffer. `<render component="Dep" />` inside a section is safe — the output cache only echoes HTML and never opens new sections.
 
 ```html
 <!--extends::Layout-->
-<!--load::Widgets.Card-->   ← load all deps first, before any section
+<!--load::Widgets.Card-->              ← load all deps first, before any section
 <!--section::content-->
-@render('Widgets.Card')     ← render inside a section is fine
+<render component="Widgets.Card" />   ← render inside a section is fine
 ```
 
 ### `ModifierInterface`
 
-Implement `process(array $sections): string` where `$sections` is `['ComponentName' => 'content']`. Register on the `Template` instance via `addModifier(string $key, ModifierInterface)` and reference by key in component files: `@renderSectionBlock('style', 'css')`.
+Implement `process(array $sections): string` where `$sections` is `['ComponentName' => 'content']`. Register on the `Template` instance via `addModifier(string $key, ModifierInterface)` and reference by key in component files: `<renderSectionBlock name="style" modifier="css" />`.
 
 ### `executeFile()` scoping
 

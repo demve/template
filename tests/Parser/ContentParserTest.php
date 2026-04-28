@@ -18,7 +18,7 @@ class ContentParserTest extends TestCase
 
     public function test_replaces_dmv_template_tags(): void
     {
-        $input  = '<dmv_template>foo</dmv_template>';
+        $input  = '<dmv-template>foo</dmv-template>';
         $output = $this->parser->parse($input, 'MyComponent');
 
         $this->assertStringContainsString("<script type='text/template' id='template-MyComponent'", $output);

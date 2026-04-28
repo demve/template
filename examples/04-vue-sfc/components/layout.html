@@ -3,7 +3,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>@renderSection('title', 'App')</title>
+  <title><renderSection name="title" default="App" /></title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body   { font-family: system-ui, sans-serif; background: #f8fafc; color: #1e293b; }
@@ -18,7 +18,7 @@
     renderSectionBlock collects them in load order and outputs them together.
     Pass a CssMinifier (see example 03) to minify the combined output.
   -->
-  @renderSectionBlock('style')
+  <renderSectionBlock name="style" />
 
 </head>
 <body>
@@ -35,15 +35,15 @@
     All <script type="text/template"> blocks from every loaded component.
     They are hidden from the user but available to the JS router via getElementById.
   -->
-  @renderSectionBlock('template')
+  <renderSectionBlock name="template" />
 
   <!--
     All <script> blocks from every loaded component, in load order.
     Each component's JS runs after its template is in the DOM.
   -->
-  @renderSectionBlock('script')
+  <renderSectionBlock name="script" />
 
-  @renderSectionBlock('console_errors')
+  <renderSectionBlock name="console_errors" />
 
 </body>
 </html>
