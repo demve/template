@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Demeve\Template;
 
+use Demeve\Template\Modifier\CssModifier;
+use Demeve\Template\Modifier\HtmlModifier;
+use Demeve\Template\Modifier\JsModifier;
 use Demeve\Template\Parser\ContentParser;
 use Demeve\Template\Parser\OutputParser;
 
@@ -51,6 +54,11 @@ class Template
         $this->publicUrl      = rtrim($publicUrl, '/');
         $this->contentParser  = $contentParser ?? new ContentParser();
         $this->outputParser   = $outputParser  ?? new OutputParser();
+        $this->modifiers      = [
+            'html' => new HtmlModifier(),
+            'css'  => new CssModifier(),
+            'js'   => new JsModifier(),
+        ];
         $this->ensureCacheDir();
     }
 
@@ -157,8 +165,13 @@ class Template
             return;
         }
         if ($this->currentSection !== null) {
-            $this->sections['errors'][] = "'{$this->currentComponent}' had an open section '{$this->currentSection}' while loading '{$component}'";
-            return;
+            $section = $this->currentSection;
+            ob_end_clean();
+            $this->currentSection = null;
+            throw new \LogicException(
+                "load('{$component}') called while section '{$section}' is open in '{$this->currentComponent}'. "
+                . "All load() calls must appear before any section() in the same file."
+            );
         }
 
         $fullPath = $this->resolveComponentPath($component);
