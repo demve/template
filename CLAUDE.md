@@ -19,16 +19,18 @@ composer test                                           # run full suite
 
 A component file is a plain HTML file that calls `$builder->section('name')` (via comment directives) to declare named sections. One section named **`output`** is the renderable template. All other sections (e.g. `style`, `script`) accumulate across components and are rendered together at the end of the page.
 
-### Two-cache pipeline
+### Cache pipeline
 
-Loading a component writes **two** cache files:
+Loading a component writes per-section cache files:
 
 | Cache file | When rebuilt | Contains |
 |---|---|---|
-| `{component}.load.cache.php` | Source file newer | Raw component HTML with directives replaced by PHP calls |
-| `{component}.output.cache.php` | Load cache newer | Compiled PHP template for the `output` section |
+| `{component}.lock` | Source file newer | Empty — mtime is the validity marker |
+| `{component}.{section}.cache.php` | Source file newer | Compiled content for each section |
 
-`render()` always calls `load()` first (idempotent), then `include`s the output cache. This is the same pattern used by Laravel Blade.
+On a cache miss, `ContentParser` output is `eval()`'d to capture sections; each `sectionStop()` picks a parser by section name (`'output'` → `OutputParser`, all others → `ContentParser` identity) and writes the section cache file. On a cache hit, existing `*.cache.php` files are globbed to restore `$sections` without re-executing.
+
+`render()` `include`s `{component}.output.cache.php` (which remains OPcache-eligible). This is the same pattern used by Laravel Blade.
 
 ### Key files
 
@@ -36,8 +38,9 @@ Loading a component writes **two** cache files:
 |---|---|
 | [`src/Template.php`](src/Template.php) | Main class — the only public API surface |
 | [`src/ModifierInterface.php`](src/ModifierInterface.php) | Contract for section post-processors (e.g. CSS minifier) |
-| [`src/Parser/ContentParser.php`](src/Parser/ContentParser.php) | Pass 1 — transforms raw HTML into executable PHP (load cache) |
-| [`src/Parser/OutputParser.php`](src/Parser/OutputParser.php) | Pass 2 — compiles the `output` section into a PHP template (output cache) |
+| [`src/Parser/SectionParserInterface.php`](src/Parser/SectionParserInterface.php) | `compile(string): string` — implemented by both parsers |
+| [`src/Parser/ContentParser.php`](src/Parser/ContentParser.php) | Pass 1 — transforms raw HTML into executable PHP for `eval()`; identity `compile()` for non-output sections |
+| [`src/Parser/OutputParser.php`](src/Parser/OutputParser.php) | Pass 2 — compiles the `output` section into a PHP template |
 
 ### Component file syntax
 
@@ -75,11 +78,11 @@ Comments are used so IDEs can still highlight and format the HTML normally.
     <%$n%><dmv-php>$n++;</dmv-php>
   </dmv-while>
 
-  <render component="OtherComponent" />
-  <renderSection name="content" />
-  <renderSection name="title" default="My App" />
-  <renderSectionBlock name="style" />
-  <renderSectionBlock name="style" modifier="css" />
+  <dmv-render component="OtherComponent" />
+  <dmv-renderSection name="content" />
+  <dmv-renderSection name="title" default="My App" />
+  <dmv-renderSectionBlock name="style" />
+  <dmv-renderSectionBlock name="style" modifier="css" />
 </div>
 ```
 
@@ -109,23 +112,25 @@ $t->load('Page');   // also auto-loads Layout via <!--extends::Layout-->
 $t->render('Page'); // renders Layout's output cache
 ```
 
-**`<!--load::Dep-->` must come before any `<!--section::...-->`** in the same file. `load()` is blocked when a section is open because the dependency's own `section()` calls would auto-close the currently active section, corrupting the parent's buffer. `<render component="Dep" />` inside a section is safe — the output cache only echoes HTML and never opens new sections.
+**`<!--load::Dep-->` must come before any `<!--section::...-->`** in the same file. `load()` is blocked when a section is open because the dependency's own `section()` calls would auto-close the currently active section, corrupting the parent's buffer. `<dmv-render component="Dep" />` inside a section is safe — the output cache only echoes HTML and never opens new sections.
 
 ```html
 <!--extends::Layout-->
-<!--load::Widgets.Card-->              ← load all deps first, before any section
+<!--load::Widgets.Card-->                   ← load all deps first, before any section
 <!--section::content-->
-<render component="Widgets.Card" />   ← render inside a section is fine
+<dmv-render component="Widgets.Card" />    ← render inside a section is fine
 ```
 
 ### `ModifierInterface`
 
-Implement `process(array $sections): string` where `$sections` is `['ComponentName' => 'content']`. Register on the `Template` instance via `addModifier(string $key, ModifierInterface)` and reference by key in component files: `<renderSectionBlock name="style" modifier="css" />`.
+Implement `process(array $sections): string` where `$sections` is `['ComponentName' => 'content']`. Register on the `Template` instance via `addModifier(string $key, ModifierInterface)` and reference by key in component files: `<dmv-renderSectionBlock name="style" modifier="css" />`.
 
-### `executeFile()` scoping
+### Component execution scoping
 
-Cache files are included inside `executeFile()` where:
+Both execution paths expose the same scope to component code:
 - `$builder` = the `Template` instance
-- any `$data` keys are available as local variables (via `extract()` with `EXTR_SKIP`)
+- any `$data` keys available as local variables (via `extract()` with `EXTR_SKIP`)
 
-Variable names `$__file` and `$__data` are deliberately prefixed to prevent collisions with extracted template variables.
+**Load phase** (`evalComponent()`): `ContentParser` output is `eval()`'d. Variable names `$builder` and `$data` are the only locals in scope — no `$__` prefixing needed since there is no `include`.
+
+**Render phase** (`executeFile()`): output cache is `include`'d. Variable names `$__file` and `$__data` are deliberately prefixed to prevent collisions with extracted template variables.
