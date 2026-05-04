@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Demeve\Template\Parser;
 
-class OutputParser
+class OutputParser implements SectionParserInterface
 {
     public function compile(string $content): string
     {

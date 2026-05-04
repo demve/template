@@ -11,8 +11,13 @@ namespace Demeve\Template\Parser;
  * PHP file that, when included, calls $builder->section() / sectionStop() to
  * register the component's sections into the Template instance.
  */
-class ContentParser
+class ContentParser implements SectionParserInterface
 {
+    public function compile(string $content): string
+    {
+        return $content;
+    }
+
     public function parse(string $content, string $component): string
     {
         $content = str_replace(
