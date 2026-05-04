@@ -9,6 +9,7 @@ use Demeve\Template\Modifier\HtmlModifier;
 use Demeve\Template\Modifier\JsModifier;
 use Demeve\Template\Parser\ContentParser;
 use Demeve\Template\Parser\OutputParser;
+use Demeve\Template\Parser\SectionParserInterface;
 
 class Template
 {
@@ -20,8 +21,11 @@ class Template
     /** @var array<string, mixed> */
     private array $params = [];
 
-    /** @var array<string, array<string, string>> sections['sectionKey']['ComponentName'] = content */
+    /** @var array<string, array<string, string>> sections['sectionKey']['ComponentName'] = '/path/to/cache.php' */
     private array $sections = ['errors' => []];
+
+    /** @var array<string, SectionParserInterface> */
+    private array $sectionParsers = [];
 
     private ?string $currentSection = null;
 
@@ -54,6 +58,7 @@ class Template
         $this->publicUrl      = rtrim($publicUrl, '/');
         $this->contentParser  = $contentParser ?? new ContentParser();
         $this->outputParser   = $outputParser  ?? new OutputParser();
+        $this->sectionParsers = ['output' => $this->outputParser];
         $this->modifiers      = [
             'html' => new HtmlModifier(),
             'css'  => new CssModifier(),
@@ -137,11 +142,10 @@ class Template
         $section = $this->currentSection;
         $this->currentSection = null;
 
-        if ($section === 'output') {
-            $this->compileAndCacheOutput($this->currentComponent, $content);
-        } else {
-            $this->sections[$section][$this->currentComponent] = $content;
-        }
+        $parser    = $this->sectionParsers[$section] ?? $this->contentParser;
+        $cacheFile = $this->cacheDir . "/{$this->currentComponent}.{$section}.cache.php";
+        file_put_contents($cacheFile, $parser->compile($content));
+        $this->sections[$section][$this->currentComponent] = $cacheFile;
     }
 
     /** @return array<string, string> */
@@ -188,15 +192,16 @@ class Template
         $this->currentComponentFile = $this->componentToRelativePath($component);
         $this->loadedComponents[$component] = true;
 
-        $loadCache = $this->cacheDir . "/{$component}.load.cache.php";
-        if (!$this->isCacheValid($loadCache, $fullPath)) {
-            file_put_contents(
-                $loadCache,
-                $this->contentParser->parse((string) file_get_contents($fullPath), $component)
-            );
+        $lockFile = $this->cacheDir . "/{$component}.lock";
+        if (!$this->isCacheValid($lockFile, $fullPath)) {
+            $this->clearSectionCacheFiles($component);
+            $execPhp = $this->contentParser->parse((string) file_get_contents($fullPath), $component);
+            $this->evalComponent($execPhp, $data);
+            file_put_contents($lockFile, '');
+        } else {
+            $this->loadSectionPathsFromCache($component);
         }
 
-        $this->executeFile($loadCache, $data);
         $this->sectionStop();
 
         // After child sections are captured, auto-load its parent layout (if any)
@@ -228,8 +233,8 @@ class Template
             $renderTarget = $this->extendsMap[$renderTarget];
         }
 
-        $outputCache = $this->cacheDir . "/{$renderTarget}.output.cache.php";
-        if (!file_exists($outputCache)) {
+        $outputCache = $this->sections['output'][$renderTarget] ?? null;
+        if ($outputCache === null || !file_exists($outputCache)) {
             return null;
         }
 
@@ -250,7 +255,15 @@ class Template
     public function renderSection(string $section, string $default = ''): void
     {
         $items = $this->sectionGet($section);
-        echo $items !== [] ? implode("\n", $items) : $default;
+        if ($items === []) {
+            echo $default;
+            return;
+        }
+        $parts = [];
+        foreach ($items as $cachePath) {
+            $parts[] = (string) file_get_contents($cachePath);
+        }
+        echo implode("\n", $parts);
     }
 
     /**
@@ -267,7 +280,11 @@ class Template
             $this->consoleErrors();
             return;
         }
-        $sections = $this->sectionGet($section);
+        $paths = $this->sectionGet($section);
+        $sections = [];
+        foreach ($paths as $component => $cachePath) {
+            $sections[$component] = (string) file_get_contents($cachePath);
+        }
         if ($modifierKey !== null && isset($this->modifiers[$modifierKey])) {
             echo $this->modifiers[$modifierKey]->process($sections);
         } else {
@@ -402,20 +419,30 @@ class Template
         return file_exists($cacheFile) && filemtime($cacheFile) >= filemtime($sourceFile);
     }
 
-    /**
-     * Parse the "output" section content and write the output cache file.
-     * Skips re-compilation when the output cache is newer than the load cache.
-     */
-    private function compileAndCacheOutput(string $component, string $content): void
+    private function evalComponent(string $phpCode, array $data): void
     {
-        $loadCache   = $this->cacheDir . "/{$component}.load.cache.php";
-        $outputCache = $this->cacheDir . "/{$component}.output.cache.php";
-
-        if ($this->isCacheValid($outputCache, $loadCache)) {
-            return;
+        $builder = $this;
+        if ($data !== []) {
+            extract($data, EXTR_SKIP);
         }
+        eval('?>' . $phpCode);
+    }
 
-        file_put_contents($outputCache, $this->outputParser->compile($content));
+    private function clearSectionCacheFiles(string $component): void
+    {
+        foreach (glob($this->cacheDir . '/' . $component . '.*.cache.php') ?: [] as $f) {
+            @unlink($f);
+        }
+    }
+
+    private function loadSectionPathsFromCache(string $component): void
+    {
+        $prefix = $component . '.';
+        $suffix = '.cache.php';
+        foreach (glob($this->cacheDir . '/' . $component . '.*.cache.php') ?: [] as $file) {
+            $inner = substr(basename($file), strlen($prefix), -strlen($suffix));
+            $this->sections[$inner][$component] = $file;
+        }
     }
 
     private function ensureCacheDir(): void
