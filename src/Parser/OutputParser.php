@@ -91,8 +91,25 @@ class OutputParser implements SectionParserInterface
         );
 
         $content = (string) preg_replace_callback(
-            '/<dmv-render\s+component=' . $quotesRegex . '\s*\/?>/i',
-            static fn(array $m): string => '<?php $builder->render(\'' . str_replace("'", "\\'", trim($m[2])) . '\'); ?>',
+            '/<dmv-render\s+((?:[^>\'"]|"[^"]*"|\'[^\']*\')*)\s*\/?>/i',
+            static function (array $m) use ($quotesRegex): string {
+                $attrs = $m[1];
+
+                preg_match('/component=' . $quotesRegex . '/i', $attrs, $c);
+                preg_match('/data=' . $quotesRegex . '/i', $attrs, $d);
+
+                $comp = trim($c[2] ?? '');
+                $compArg = str_starts_with($comp, '$')
+                    ? $comp
+                    : "'" . str_replace("'", "\\'", $comp) . "'";
+
+                $args = $compArg;
+                if (isset($d[2])) {
+                    $args .= ', ' . trim($d[2]);
+                }
+
+                return "<?php \$builder->render($args); ?>";
+            },
             $content
         );
 
