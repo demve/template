@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Demeve\Template;
 
+use Demeve\Template\FileModifierInterface;
 use Demeve\Template\Modifier\CssModifier;
 use Demeve\Template\Modifier\HtmlModifier;
 use Demeve\Template\Modifier\JsModifier;
@@ -38,7 +39,7 @@ class Template
     private string $currentComponent     = '__root__';
     private ?string $currentComponentFile = null;
 
-    /** @var array<string, ModifierInterface> */
+    /** @var array<string, ModifierInterface|FileModifierInterface> */
     private array $modifiers = [];
 
     private ContentParser $contentParser;
@@ -96,7 +97,7 @@ class Template
         return $this;
     }
 
-    public function addModifier(string $key, ModifierInterface $modifier): static
+    public function addModifier(string $key, ModifierInterface|FileModifierInterface $modifier): static
     {
         $this->modifiers[$key] = $modifier;
         return $this;
@@ -192,21 +193,27 @@ class Template
         $this->currentComponentFile = $this->componentToRelativePath($component);
         $this->loadedComponents[$component] = true;
 
-        $lockFile = $this->cacheDir . "/{$component}.lock";
-        if (!$this->isCacheValid($lockFile, $fullPath)) {
+        $loadFile = $this->cacheDir . "/{$component}.load.cache.php";
+        if (!$this->isCacheValid($loadFile, $fullPath)) {
             $this->clearSectionCacheFiles($component);
+            $depsBefore = array_keys($this->loadedComponents);
             $execPhp = $this->contentParser->parse((string) file_get_contents($fullPath), $component);
             $this->evalComponent($execPhp, $data);
-            file_put_contents($lockFile, '');
+            $this->sectionStop();
+            if (isset($this->extendsMap[$component])) {
+                $this->load($this->extendsMap[$component], $data);
+            }
+            $deps = array_values(array_diff(array_keys($this->loadedComponents), $depsBefore));
+            $this->writeLoadCache($loadFile, $deps, $this->extendsMap[$component] ?? null);
         } else {
+            $cacheData = include $loadFile;
+            if (isset($cacheData['extends'])) {
+                $this->extendsMap[$component] = $cacheData['extends'];
+            }
+            foreach ($cacheData['deps'] as $dep) {
+                $this->load($dep, $data);
+            }
             $this->loadSectionPathsFromCache($component);
-        }
-
-        $this->sectionStop();
-
-        // After child sections are captured, auto-load its parent layout (if any)
-        if (isset($this->extendsMap[$component])) {
-            $this->load($this->extendsMap[$component], $data);
         }
 
         // Pop context
@@ -286,10 +293,46 @@ class Template
             $sections[$component] = (string) file_get_contents($cachePath);
         }
         if ($modifierKey !== null && isset($this->modifiers[$modifierKey])) {
-            echo $this->modifiers[$modifierKey]->process($sections);
+            $modifier = $this->modifiers[$modifierKey];
+            if ($modifier instanceof ModifierInterface) {
+                echo $modifier->process($sections);
+            }
         } else {
             echo implode("\n", $sections);
         }
+    }
+
+    /**
+     * Like renderSectionBlock but passes file paths to the modifier instead of
+     * reading the file contents first. When the modifier implements
+     * FileModifierInterface it can decide whether to read the files at all
+     * (e.g. skip reading when a derived output file is still fresh).
+     * Falls back to reading + process() for plain ModifierInterface, or
+     * implodes file contents when no modifier is given.
+     */
+    public function renderSectionFiles(string $section, ?string $modifierKey = null): void
+    {
+        $paths = $this->sectionGet($section);
+
+        if ($modifierKey !== null && isset($this->modifiers[$modifierKey])) {
+            $modifier = $this->modifiers[$modifierKey];
+            if ($modifier instanceof FileModifierInterface) {
+                echo $modifier->processFiles($paths);
+                return;
+            }
+            $sections = [];
+            foreach ($paths as $component => $path) {
+                $sections[$component] = (string) file_get_contents($path);
+            }
+            echo $modifier->process($sections);
+            return;
+        }
+
+        $parts = [];
+        foreach ($paths as $path) {
+            $parts[] = (string) file_get_contents($path);
+        }
+        echo implode("\n", $parts);
     }
 
     /**
@@ -433,6 +476,12 @@ class Template
         foreach (glob($this->cacheDir . '/' . $component . '.*.cache.php') ?: [] as $f) {
             @unlink($f);
         }
+    }
+
+    private function writeLoadCache(string $loadFile, array $deps, ?string $extends): void
+    {
+        $export = var_export(['extends' => $extends, 'deps' => $deps], true);
+        file_put_contents($loadFile, "<?php return {$export};");
     }
 
     private function loadSectionPathsFromCache(string $component): void

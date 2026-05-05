@@ -142,6 +142,29 @@ class OutputParser implements SectionParserInterface
             $content
         );
 
+        $content = (string) preg_replace_callback(
+            '/<dmv-renderSectionFiles\s+([^>]+?)\s*\/?>/i',
+            static function (array $m) use ($quotesRegex, $escape): string {
+                $attrs = $m[1];
+
+                preg_match('/name=' . $quotesRegex . '/i', $attrs, $n);
+                preg_match('/modifier=' . $quotesRegex . '/i', $attrs, $mod);
+
+                if (!isset($n[2])) {
+                    throw new \RuntimeException('name requerido');
+                }
+
+                $args = "'" . $escape($n[2]) . "'";
+
+                if (isset($mod[2])) {
+                    $args .= ", '" . $escape($mod[2]) . "'";
+                }
+
+                return "<?php \$builder->renderSectionFiles($args); ?>";
+            },
+            $content
+        );
+
         return trim($content) . PHP_EOL;
     }
 }

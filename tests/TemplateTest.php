@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Demeve\Template\Tests;
 
+use Demeve\Template\FileModifierInterface;
 use Demeve\Template\ModifierInterface;
 use Demeve\Template\Template;
 use PHPUnit\Framework\TestCase;
@@ -193,6 +194,91 @@ class TemplateTest extends TestCase
         ob_start();
         $t->renderSectionBlock('style', 'nonexistent');
         $this->assertSame('css', trim((string) ob_get_clean()));
+    }
+
+    public function test_render_section_files_implodes_without_modifier(): void
+    {
+        file_put_contents(
+            $this->tmp . '/components/a.html',
+            '<?php $builder->section("style"); ?>a<?php $builder->sectionStop(); ?>'
+        );
+        file_put_contents(
+            $this->tmp . '/components/b.html',
+            '<?php $builder->section("style"); ?>b<?php $builder->sectionStop(); ?>'
+        );
+        $t = $this->makeTemplate();
+        $t->load('A');
+        $t->load('B');
+        ob_start();
+        $t->renderSectionFiles('style');
+        $this->assertSame("a\nb", trim((string) ob_get_clean()));
+    }
+
+    public function test_render_section_files_calls_file_modifier_with_paths(): void
+    {
+        file_put_contents(
+            $this->tmp . '/components/widget.html',
+            '<?php $builder->section("style"); ?>css<?php $builder->sectionStop(); ?>'
+        );
+
+        $receivedPaths = [];
+        $modifier = new class ($receivedPaths) implements FileModifierInterface {
+            public function __construct(private array &$captured) {}
+            public function processFiles(array $files): string
+            {
+                $this->captured = $files;
+                return 'FILE_MODIFIER_OUTPUT';
+            }
+        };
+
+        $t = $this->makeTemplate();
+        $t->addModifier('fm', $modifier);
+        $t->load('Widget');
+
+        ob_start();
+        $t->renderSectionFiles('style', 'fm');
+        $output = (string) ob_get_clean();
+
+        $this->assertSame('FILE_MODIFIER_OUTPUT', $output);
+        $this->assertArrayHasKey('Widget', $receivedPaths);
+        $this->assertStringEndsWith('.cache.php', $receivedPaths['Widget']);
+        $this->assertFileExists($receivedPaths['Widget']);
+    }
+
+    public function test_render_section_files_falls_back_to_modifier_interface(): void
+    {
+        file_put_contents(
+            $this->tmp . '/components/widget.html',
+            '<?php $builder->section("style"); ?>  raw  <?php $builder->sectionStop(); ?>'
+        );
+
+        $modifier = new class implements ModifierInterface {
+            public function process(array $sections): string
+            {
+                return strtoupper(implode('|', $sections));
+            }
+        };
+
+        $t = $this->makeTemplate();
+        $t->addModifier('upper', $modifier);
+        $t->load('Widget');
+
+        ob_start();
+        $t->renderSectionFiles('style', 'upper');
+        $this->assertSame('RAW', (string) ob_get_clean());
+    }
+
+    public function test_render_section_files_skips_unknown_modifier_key(): void
+    {
+        file_put_contents(
+            $this->tmp . '/components/widget.html',
+            '<?php $builder->section("style"); ?>x<?php $builder->sectionStop(); ?>'
+        );
+        $t = $this->makeTemplate();
+        $t->load('Widget');
+        ob_start();
+        $t->renderSectionFiles('style', 'nonexistent');
+        $this->assertSame('x', trim((string) ob_get_clean()));
     }
 
     // -------------------------------------------------------------------------

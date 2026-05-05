@@ -15,10 +15,10 @@
 
   <!--
     All <style> blocks from every loaded component land here.
-    renderSectionBlock collects them in load order and outputs them together.
+    dmv-renderSectionBlock collects them in load order and outputs them together.
     Pass a CssMinifier (see example 03) to minify the combined output.
   -->
-  <renderSectionBlock name="style" />
+  <dmv-renderSectionBlock name="style" />
 
 </head>
 <body>
@@ -35,15 +35,15 @@
     All <script type="text/template"> blocks from every loaded component.
     They are hidden from the user but available to the JS router via getElementById.
   -->
-  <renderSectionBlock name="template" />
+  <dmv-renderSectionBlock name="template" />
 
   <!--
     All <script> blocks from every loaded component, in load order.
     Each component's JS runs after its template is in the DOM.
   -->
-  <renderSectionBlock name="script" />
+  <dmv-renderSectionBlock name="script" />
 
-  <renderSectionBlock name="console_errors" />
+  <dmv-renderSectionBlock name="console_errors" />
 
 </body>
 </html>

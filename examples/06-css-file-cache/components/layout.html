@@ -1,0 +1,21 @@
+<!--section::output-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title><dmv-renderSection name="title" default="CSS File Cache Demo" /></title>
+
+  <!--
+    renderSectionFiles passes file paths to the modifier instead of reading content.
+    CssFileModifier checks mtimes: if styles.css is newer than all *.style.cache.php
+    files it returns the <link> tag immediately without reading any file.
+    On a miss it reads + minifies + writes, then returns a cache-busted <link>.
+  -->
+  <dmv-renderSectionFiles name="style" modifier="css-file" />
+
+</head>
+<body>
+  <dmv-renderSection name="content" />
+  <dmv-renderSectionBlock name="console_errors" />
+</body>
+</html>

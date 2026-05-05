@@ -3,18 +3,18 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title><renderSection name="title" default="Modifier Demo" /></title>
+  <title><dmv-renderSection name="title" default="Modifier Demo" /></title>
 
   <!--
     'css' is a modifier key registered in run.php via $t->addModifier('css', new CssMinifier()).
     The modifier receives the sections array and returns the minified combined string.
     Component files never instantiate PHP classes — just reference the key.
   -->
-  <renderSectionBlock name="style" modifier="css" />
+  <dmv-renderSectionBlock name="style" modifier="css" />
 
 </head>
 <body>
-  <renderSection name="content" />
-  <renderSectionBlock name="console_errors" />
+  <dmv-renderSection name="content" />
+  <dmv-renderSectionBlock name="console_errors" />
 </body>
 </html>

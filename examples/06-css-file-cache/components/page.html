@@ -1,0 +1,35 @@
+<!--extends::Layout-->
+<!--load::Button-->
+
+<!--section::title-->CSS File Cache Demo
+
+<!--section::style-->
+<style>
+  /* Page base styles */
+  body {
+    font-family: sans-serif;
+    margin: 0;
+    padding: 2rem;
+  }
+
+  h1 {
+    color: #333;
+  }
+
+  code {
+    background: #f3f4f6;
+    padding: .1rem .35rem;
+    border-radius: 3px;
+    font-size: .9em;
+  }
+</style>
+
+<!--section::content-->
+<h1>CSS file cache example</h1>
+<p>Combined CSS from this page and the Button component is minified and saved to
+   <code>public/styles.css</code>.</p>
+<p>On the next request the modifier checks whether <code>public/styles.css</code>
+   is newer than all <code>*.style.cache.php</code> files. If so, minification is
+   skipped and the existing file is served via a <code>&lt;link&gt;</code> tag.</p>
+
+<!--render::Button-->
