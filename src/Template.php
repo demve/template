@@ -42,6 +42,11 @@ class Template
     /** @var array<string, ModifierInterface|FileModifierInterface> */
     private array $modifiers = [];
 
+    private int $renderDepth = 0;
+
+    /** @var array<string, array{type: string, section: string, modifier: string|null}> */
+    private array $sectionQueue = [];
+
     private ContentParser $contentParser;
     private OutputParser $outputParser;
 
@@ -200,6 +205,12 @@ class Template
             $execPhp = $this->contentParser->parse((string) file_get_contents($fullPath), $component);
             $this->evalComponent($execPhp, $data);
             $this->sectionStop();
+            $outputCachePath = $this->sections['output'][$component] ?? null;
+            if ($outputCachePath !== null && file_exists($outputCachePath)) {
+                foreach ($this->extractRenderDeps((string) file_get_contents($outputCachePath)) as $dep) {
+                    $this->load($dep, $data);
+                }
+            }
             if (isset($this->extendsMap[$component])) {
                 $this->load($this->extendsMap[$component], $data);
             }
@@ -222,16 +233,22 @@ class Template
     }
 
     /**
-     * Render a previously loaded component into the output buffer.
-     * The component MUST be loaded first via load() — render() intentionally does
-     * not auto-load so that it is safe to call from inside a section buffer.
-     * Pass $return = true to capture the output instead of echoing it.
+     * Render a previously loaded component. Auto-loads if needed.
+     *
+     * At depth 0 (top-level call): wraps execution in an output buffer so that
+     * any renderSectionBlock/renderSectionFiles placeholders emitted by nested
+     * templates are replaced with fully-accumulated section content once all
+     * dynamic loads have completed.
+     *
+     * Pass $return = true to capture the final output instead of echoing it.
      */
     public function render(string $component, array $data = [], bool $return = false): ?string
     {
         if (!isset($this->loadedComponents[$component])) {
-            $this->sections['errors'][] = "render('{$component}') called but '{$component}' is not loaded";
-            return null;
+            $this->load($component, $data);
+            if (!isset($this->loadedComponents[$component])) {
+                return null;
+            }
         }
 
         // Walk up the inheritance chain to find the root layout to render
@@ -245,14 +262,47 @@ class Template
             return null;
         }
 
-        if ($return) {
+        $isTopLevel = ($this->renderDepth === 0);
+
+        if ($isTopLevel) {
             ob_start();
-            $this->executeFile($outputCache, $data);
-            return (string) ob_get_clean();
         }
 
+        $this->renderDepth++;
         $this->executeFile($outputCache, $data);
+        $this->renderDepth--;
+
+        if ($isTopLevel) {
+            $html = $this->inject((string) ob_get_clean());
+            $this->sectionQueue = [];
+            if ($return) {
+                return $html;
+            }
+            echo $html;
+            return null;
+        }
+
         return null;
+    }
+
+    /**
+     * Replace all deferred section-block placeholders in $html with their
+     * fully-accumulated content. Safe to call manually when render() is not
+     * used as the outer wrapper (e.g., tests that build $html themselves).
+     */
+    public function inject(string $html): string
+    {
+        foreach ($this->sectionQueue as $key => $entry) {
+            $placeholder = "<!-- __DMV:{$key}__ -->";
+            ob_start();
+            if ($entry['type'] === 'files') {
+                $this->renderSectionFilesInline($entry['section'], $entry['modifier']);
+            } else {
+                $this->renderSectionBlockInline($entry['section'], $entry['modifier']);
+            }
+            $html = str_replace($placeholder, (string) ob_get_clean(), $html);
+        }
+        return $html;
     }
 
     /**
@@ -275,11 +325,8 @@ class Template
 
     /**
      * Render a multi-item block section (CSS, JS, HTML templates, etc.).
-     *
-     * $modifierKey refers to a modifier registered via addModifier(). The modifier
-     * receives the raw sections array (ComponentName => content) and is responsible
-     * for combining and transforming it into the final output string.
-     * When no modifier is registered for the key (or key is null), items are joined with "\n".
+     * Inside a render() call (depth > 0) emits a deferred placeholder so that
+     * sections accumulated by dynamic child renders are included at inject() time.
      */
     public function renderSectionBlock(string $section, ?string $modifierKey = null): void
     {
@@ -287,52 +334,28 @@ class Template
             $this->consoleErrors();
             return;
         }
-        $paths = $this->sectionGet($section);
-        $sections = [];
-        foreach ($paths as $component => $cachePath) {
-            $sections[$component] = (string) file_get_contents($cachePath);
+        if ($this->renderDepth > 0) {
+            $key = "block:{$section}:" . ($modifierKey ?? '');
+            $this->sectionQueue[$key] = ['type' => 'block', 'section' => $section, 'modifier' => $modifierKey];
+            echo "<!-- __DMV:{$key}__ -->";
+            return;
         }
-        if ($modifierKey !== null && isset($this->modifiers[$modifierKey])) {
-            $modifier = $this->modifiers[$modifierKey];
-            if ($modifier instanceof ModifierInterface) {
-                echo $modifier->process($sections);
-            }
-        } else {
-            echo implode("\n", $sections);
-        }
+        $this->renderSectionBlockInline($section, $modifierKey);
     }
 
     /**
      * Like renderSectionBlock but passes file paths to the modifier instead of
-     * reading the file contents first. When the modifier implements
-     * FileModifierInterface it can decide whether to read the files at all
-     * (e.g. skip reading when a derived output file is still fresh).
-     * Falls back to reading + process() for plain ModifierInterface, or
-     * implodes file contents when no modifier is given.
+     * reading file contents first. Defers to a placeholder inside render() calls.
      */
     public function renderSectionFiles(string $section, ?string $modifierKey = null): void
     {
-        $paths = $this->sectionGet($section);
-
-        if ($modifierKey !== null && isset($this->modifiers[$modifierKey])) {
-            $modifier = $this->modifiers[$modifierKey];
-            if ($modifier instanceof FileModifierInterface) {
-                echo $modifier->processFiles($paths);
-                return;
-            }
-            $sections = [];
-            foreach ($paths as $component => $path) {
-                $sections[$component] = (string) file_get_contents($path);
-            }
-            echo $modifier->process($sections);
+        if ($this->renderDepth > 0) {
+            $key = "files:{$section}:" . ($modifierKey ?? '');
+            $this->sectionQueue[$key] = ['type' => 'files', 'section' => $section, 'modifier' => $modifierKey];
+            echo "<!-- __DMV:{$key}__ -->";
             return;
         }
-
-        $parts = [];
-        foreach ($paths as $path) {
-            $parts[] = (string) file_get_contents($path);
-        }
-        echo implode("\n", $parts);
+        $this->renderSectionFilesInline($section, $modifierKey);
     }
 
     /**
@@ -428,6 +451,52 @@ class Template
     }
 
     // -------------------------------------------------------------------------
+    // Private inline renderers (used by public methods and inject())
+    // -------------------------------------------------------------------------
+
+    private function renderSectionBlockInline(string $section, ?string $modifierKey): void
+    {
+        $paths = $this->sectionGet($section);
+        $sections = [];
+        foreach ($paths as $component => $cachePath) {
+            $sections[$component] = (string) file_get_contents($cachePath);
+        }
+        if ($modifierKey !== null && isset($this->modifiers[$modifierKey])) {
+            $modifier = $this->modifiers[$modifierKey];
+            if ($modifier instanceof ModifierInterface) {
+                echo $modifier->process($sections);
+            }
+        } else {
+            echo implode("\n", $sections);
+        }
+    }
+
+    private function renderSectionFilesInline(string $section, ?string $modifierKey): void
+    {
+        $paths = $this->sectionGet($section);
+
+        if ($modifierKey !== null && isset($this->modifiers[$modifierKey])) {
+            $modifier = $this->modifiers[$modifierKey];
+            if ($modifier instanceof FileModifierInterface) {
+                echo $modifier->processFiles($paths);
+                return;
+            }
+            $sections = [];
+            foreach ($paths as $component => $path) {
+                $sections[$component] = (string) file_get_contents($path);
+            }
+            echo $modifier->process($sections);
+            return;
+        }
+
+        $parts = [];
+        foreach ($paths as $path) {
+            $parts[] = (string) file_get_contents($path);
+        }
+        echo implode("\n", $parts);
+    }
+
+    // -------------------------------------------------------------------------
     // Private helpers
     // -------------------------------------------------------------------------
 
@@ -492,6 +561,13 @@ class Template
             $inner = substr(basename($file), strlen($prefix), -strlen($suffix));
             $this->sections[$inner][$component] = $file;
         }
+    }
+
+    /** @return array<string> */
+    private function extractRenderDeps(string $cacheContent): array
+    {
+        preg_match_all('/\$builder->render\(\'([^\']+)\'/', $cacheContent, $matches);
+        return array_unique($matches[1]);
     }
 
     private function ensureCacheDir(): void
