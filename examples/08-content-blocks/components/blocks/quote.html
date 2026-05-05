@@ -1,0 +1,13 @@
+<!--section::style-->
+<style>
+.block-quote { background: #fffbeb; border-left: 4px solid #f59e0b; padding: 1rem 1.25rem; margin: .75rem 0; border-radius: 0 6px 6px 0; }
+.block-quote blockquote { margin: 0; font-style: italic; font-size: 1.05rem; }
+.block-quote cite { display: block; margin-top: .5rem; font-size: .85rem; color: #78716c; }
+</style>
+<!--section::output-->
+<div class="block-quote">
+  <blockquote><%$cita%></blockquote>
+  <dmv-if test="isset($autor)">
+    <cite>— <%$autor%></cite>
+  </dmv-if>
+</div>

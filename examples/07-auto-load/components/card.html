@@ -1,0 +1,10 @@
+<!--section::style-->
+<style>
+.card { border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin: 8px 0; }
+.card h3 { margin: 0 0 8px; }
+</style>
+<!--section::output-->
+<div class="card">
+  <h3><%$builder->get('title')%> <dmv-render component="Badge" /></h3>
+  <p><%$builder->get('body')%></p>
+</div>

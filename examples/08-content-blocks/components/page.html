@@ -1,0 +1,19 @@
+<!--section::output-->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title><%$titulo ?? 'Content Blocks'%></title>
+  <link rel="stylesheet" href="../../../examples/shared.css">
+  <dmv-renderSectionBlock name="style" />
+</head>
+<body>
+  <h1><%$titulo ?? 'Content Blocks'%></h1>
+  <div class="blocks">
+    <dmv-foreach on="$bloques as $bloque">
+      <dmv-render component="$bloque->componente" data="$bloque->data" />
+    </dmv-foreach>
+  </div>
+  <dmv-renderSectionBlock name="console_errors" />
+</body>
+</html>

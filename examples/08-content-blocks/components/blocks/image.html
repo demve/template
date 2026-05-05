@@ -1,0 +1,13 @@
+<!--section::style-->
+<style>
+.block-image { margin: .75rem 0; }
+.block-image img { max-width: 100%; border-radius: 8px; display: block; }
+.block-image figcaption { font-size: .85rem; color: #666; margin-top: .35rem; }
+</style>
+<!--section::output-->
+<figure class="block-image">
+  <img src="<%$src%>" alt="<%$alt ?? ''%>">
+  <dmv-if test="isset($caption)">
+    <figcaption><%$caption%></figcaption>
+  </dmv-if>
+</figure>
