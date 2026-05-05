@@ -91,12 +91,66 @@ class TemplateTest extends TestCase
         $this->assertSame('Hello', trim((string) ob_get_clean()));
     }
 
-    public function test_render_without_load_adds_error(): void
+    public function test_render_nonexistent_component_returns_null_with_error(): void
     {
         $t = $this->makeTemplate();
-        $result = $t->render('NotLoaded');
+        $result = $t->render('NotExisting');
         $this->assertNull($result);
         $this->assertNotEmpty($t->getErrors());
+    }
+
+    public function test_render_auto_loads_unloaded_component(): void
+    {
+        file_put_contents(
+            $this->tmp . '/components/widget.html',
+            '<?php $builder->section("output"); ?>hello<?php $builder->sectionStop(); ?>'
+        );
+        $t = $this->makeTemplate();
+        // render without prior load — should auto-load and succeed
+        $output = trim((string) $t->render('Widget', [], true));
+        $this->assertSame('hello', $output);
+        $this->assertEmpty($t->getErrors());
+    }
+
+    public function test_render_deps_auto_loaded_from_output_section(): void
+    {
+        // Use HTML syntax so <dmv-render> goes through OutputParser → cache file
+        file_put_contents(
+            $this->tmp . '/components/badge.html',
+            '<!--section::output-->BADGE'
+        );
+        file_put_contents(
+            $this->tmp . '/components/card.html',
+            '<!--section::output-->CARD-<dmv-render component="Badge" />'
+        );
+
+        $t = $this->makeTemplate();
+        $t->load('Card'); // must auto-discover Badge from the compiled output cache
+        $output = trim((string) $t->render('Card', [], true));
+        $this->assertSame('CARD-BADGE', $output);
+        $this->assertEmpty($t->getErrors());
+    }
+
+    public function test_render_deps_discovered_transitively(): void
+    {
+        file_put_contents(
+            $this->tmp . '/components/leaf.html',
+            '<!--section::output-->LEAF'
+        );
+        file_put_contents(
+            $this->tmp . '/components/mid.html',
+            '<!--section::output-->MID-<dmv-render component="Leaf" />'
+        );
+        file_put_contents(
+            $this->tmp . '/components/root.html',
+            '<!--section::output-->ROOT-<dmv-render component="Mid" />'
+        );
+
+        $t = $this->makeTemplate();
+        $t->load('Root');
+        $output = trim((string) $t->render('Root', [], true));
+        $this->assertSame('ROOT-MID-LEAF', $output);
+        $this->assertEmpty($t->getErrors());
     }
 
     public function test_layout_inheritance_renders_layout_output(): void
@@ -279,6 +333,110 @@ class TemplateTest extends TestCase
         ob_start();
         $t->renderSectionFiles('style', 'nonexistent');
         $this->assertSame('x', trim((string) ob_get_clean()));
+    }
+
+    // -------------------------------------------------------------------------
+    // dmv-render: variable component + data attribute
+    // -------------------------------------------------------------------------
+
+    public function test_dmv_render_with_variable_component_name(): void
+    {
+        file_put_contents(
+            $this->tmp . '/components/block.html',
+            '<!--section::output-->BLOCK'
+        );
+        file_put_contents(
+            $this->tmp . '/components/page.html',
+            '<!--section::output--><dmv-render component="$comp" />'
+        );
+
+        $t = $this->makeTemplate();
+        $output = trim((string) $t->render('Page', ['comp' => 'Block'], true));
+        $this->assertSame('BLOCK', $output);
+        $this->assertEmpty($t->getErrors());
+    }
+
+    public function test_dmv_render_passes_data_attribute_to_component(): void
+    {
+        file_put_contents(
+            $this->tmp . '/components/item.html',
+            '<!--section::output--><%$label%>'
+        );
+        file_put_contents(
+            $this->tmp . '/components/list.html',
+            '<!--section::output--><dmv-render component="Item" data="$itemData" />'
+        );
+
+        $t = $this->makeTemplate();
+        $output = trim((string) $t->render('List', ['itemData' => ['label' => 'hello']], true));
+        $this->assertSame('hello', $output);
+        $this->assertEmpty($t->getErrors());
+    }
+
+    // -------------------------------------------------------------------------
+    // inject() / deferred section blocks (CMS blocks pattern)
+    // -------------------------------------------------------------------------
+
+    public function test_dynamic_component_styles_visible_after_inject(): void
+    {
+        // Page uses HTML dmv-syntax so the foreach and renderSectionBlock are compiled
+        // to PHP by OutputParser and execute at render-time (not baked in at load-time).
+        // renderSectionBlock runs at depth=1 → emits placeholder.
+        // foreach renders blocks dynamically → their style sections accumulate.
+        // inject() replaces placeholder with all collected styles.
+        file_put_contents(
+            $this->tmp . '/components/page.html',
+            '<!--section::output-->'
+            . '<dmv-renderSectionBlock name="style" />'
+            . '<dmv-foreach on="$bloques as $b">'
+            . '<dmv-render component="$b" />'
+            . '</dmv-foreach>'
+        );
+
+        file_put_contents(
+            $this->tmp . '/components/blocka.html',
+            '<!--section::style-->.a{color:red}'
+            . '<!--section::output--><div class="a">A</div>'
+        );
+        file_put_contents(
+            $this->tmp . '/components/blockb.html',
+            '<!--section::style-->.b{color:blue}'
+            . '<!--section::output--><div class="b">B</div>'
+        );
+
+        $t = $this->makeTemplate();
+        $output = (string) $t->render('Page', ['bloques' => ['Blocka', 'Blockb']], true);
+
+        $this->assertStringContainsString('.a{color:red}', $output);
+        $this->assertStringContainsString('.b{color:blue}', $output);
+        $this->assertStringNotContainsString('__DMV:', $output);
+        $this->assertEmpty($t->getErrors());
+    }
+
+    public function test_repeated_render_section_block_deduplicates_queue(): void
+    {
+        // Page calls renderSectionBlock('style') twice via HTML syntax.
+        // Both emit the SAME placeholder key → one sectionQueue entry → str_replace replaces both.
+        file_put_contents(
+            $this->tmp . '/components/page.html',
+            '<!--section::style-->body{}'
+            . '<!--section::output-->'
+            . '<dmv-renderSectionBlock name="style" />'
+            . '<p>mid</p>'
+            . '<dmv-renderSectionBlock name="style" />'
+        );
+
+        $t = $this->makeTemplate();
+        $output = (string) $t->render('Page', [], true);
+
+        $this->assertSame(2, substr_count($output, 'body{}'));
+        $this->assertStringNotContainsString('__DMV:', $output);
+    }
+
+    public function test_inject_is_noop_when_no_placeholders(): void
+    {
+        $t = $this->makeTemplate();
+        $this->assertSame('<p>hello</p>', $t->inject('<p>hello</p>'));
     }
 
     // -------------------------------------------------------------------------
