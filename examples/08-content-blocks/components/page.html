@@ -3,17 +3,17 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title><%$titulo ?? 'Content Blocks'%></title>
+  <title><?= $this->e($titulo ?? 'Content Blocks') ?></title>
   <link rel="stylesheet" href="../../../examples/shared.css">
-  <dmv-renderSectionBlock name="style" />
+  <!--=block::style-->
 </head>
 <body>
-  <h1><%$titulo ?? 'Content Blocks'%></h1>
+  <h1><?= $this->e($titulo ?? 'Content Blocks') ?></h1>
   <div class="blocks">
-    <dmv-foreach on="$bloques as $bloque">
-      <dmv-render component="$bloque->componente" data="$bloque->data" />
-    </dmv-foreach>
+    <?php foreach ($bloques as $bloque): ?>
+      <?= $this->render($bloque->componente, (array)$bloque->data) ?>
+    <?php endforeach; ?>
   </div>
-  <dmv-renderSectionBlock name="console_errors" />
+  <!--logErrores::js-->
 </body>
 </html>

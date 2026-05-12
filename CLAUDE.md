@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for Claude Code. Save tokens — use /caveman when possible.
 
 ## Commands
 
@@ -8,129 +8,95 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 composer install                                        # install PHPUnit
 composer test                                           # run full suite
 ./vendor/bin/phpunit --filter ContentParserTest         # single test class
-./vendor/bin/phpunit tests/Parser/OutputParserTest.php  # single file
+./vendor/bin/phpunit tests/Parser/ContentParserTest.php # single file
 ```
 
-## Architecture
+## Core goals
 
-`demeve/template` is a PHP 8.1+ library (namespace `Demeve\Template`) that gives a Vue SFC-like authoring experience in plain `.html` files.
+**A)** `$t->render($component, $data)` returns a string — the component's `output` section executed with `$data` available as local variables.
 
-### Core concept
+**B)** Components can include other components (`<?= $this->render('Widget') ?>`) or declare they are the content slot of a layout (`<!--extends::Layout-->`).
 
-A component file is a plain HTML file that calls `$builder->section('name')` (via comment directives) to declare named sections. One section named **`output`** is the renderable template. All other sections (e.g. `style`, `script`) accumulate across components and are rendered together at the end of the page.
+**C)** Components are single `.php` files. Structure uses `<!--comment directives-->` so the section boundaries are visible without custom IDE plugins.
 
-### Cache pipeline
+**D)** A component file declares named **sections** (`output`, `style`, `script`, etc.). The `output` section is the rendered PHP template. Other sections are collected and emitted separately (e.g. all `style` blocks merged into one `<head>` spot).
 
-Loading a component writes per-section cache files:
+**E)** Loading a component writes one cache file per section (`{Component}.{section}.cache.php`) plus a `{Component}.load.cache.php` recording deps and layout. Cache is OPcache-eligible. Memory-efficient: section content is not loaded until needed.
 
-| Cache file | When rebuilt | Contains |
-|---|---|---|
-| `{component}.lock` | Source file newer | Empty — mtime is the validity marker |
-| `{component}.{section}.cache.php` | Source file newer | Compiled content for each section |
+**F)** Sections accumulate **globally** across every loaded component — `style` and `script` from all widgets on the page are merged by a single `<?= $this->block('style', 'css') ?>` in the layout.
 
-On a cache miss, `ContentParser` output is `eval()`'d to capture sections; each `sectionStop()` picks a parser by section name (`'output'` → `OutputParser`, all others → `ContentParser` identity) and writes the section cache file. On a cache hit, existing `*.cache.php` files are globbed to restore `$sections` without re-executing.
+`load()` is a best practice (pre-warms cache, separates concerns) but not required — `render()` auto-loads.
 
-`render()` `include`s `{component}.output.cache.php` (which remains OPcache-eligible). This is the same pattern used by Laravel Blade.
-
-### Key files
+## Key files
 
 | File | Purpose |
 |---|---|
-| [`src/Template.php`](src/Template.php) | Main class — the only public API surface |
-| [`src/ModifierInterface.php`](src/ModifierInterface.php) | Contract for section post-processors (e.g. CSS minifier) |
-| [`src/Parser/SectionParserInterface.php`](src/Parser/SectionParserInterface.php) | `compile(string): string` — implemented by both parsers |
-| [`src/Parser/ContentParser.php`](src/Parser/ContentParser.php) | Pass 1 — transforms raw HTML into executable PHP for `eval()`; identity `compile()` for non-output sections |
-| [`src/Parser/OutputParser.php`](src/Parser/OutputParser.php) | Pass 2 — compiles the `output` section into a PHP template |
+| [`src/Template.php`](src/Template.php) | Main class — only public API |
+| [`src/Parser/ContentParser.php`](src/Parser/ContentParser.php) | Static text parser — splits `.php` file into section cache files, extracts extends/deps metadata |
+| [`src/ModifierInterface.php`](src/ModifierInterface.php) | Post-processor contract for section content (e.g. CSS minifier) |
 
-### Component file syntax
-
-Comments are used so IDEs can still highlight and format the HTML normally.
-
-```html
-<!--load::OtherComponent-->
-<!--section::style-->
-<style> ... </style>
-<!--section::output-->
-<div>
-  <%$title%>                                      <!-- HTML-escaped echo -->
-  <%%$rawHtml%%>                                  <!-- raw echo -->
-
-  <dmv-php>$x = $builder->get('key');</dmv-php>           <!-- PHP block -->
-
-  <dmv-if test="$x > 0">yes<dmv-else>no</dmv-if>
-  <dmv-if test="$x === 'admin'">
-    admin
-  <dmv-elseif test="$x === 'editor'">
-    editor
-  <dmv-else>
-    guest
-  </dmv-if>
-
-  <dmv-foreach on="$items as $i => $v">
-    <li><%$v%></li>
-  </dmv-foreach>
-
-  <dmv-for expr="$i = 1; $i <= 5; $i++">
-    <span><%$i%></span>
-  </dmv-for>
-
-  <dmv-while test="$n < 10">
-    <%$n%><dmv-php>$n++;</dmv-php>
-  </dmv-while>
-
-  <dmv-render component="OtherComponent" />
-  <dmv-renderSection name="content" />
-  <dmv-renderSection name="title" default="My App" />
-  <dmv-renderSectionBlock name="style" />
-  <dmv-renderSectionBlock name="style" modifier="css" />
-</div>
-```
-
-Comment directives call `$builder->methodName(arg1, arg2)`:
-- `<!--fn::arg-->` → single arg
-- `<!--fn::arg1|arg2-->` → two args
-- `/*fn::arg*/` → JS-style (useful inside `<script>` blocks)
-- `<!---...comment...--->`  → triple-dash, stripped entirely (dev notes)
-
-### Component naming → file path
-
-`PascalCase` names are mapped to lowercase slash-separated paths:
-- `PageHeader` → `components/page/header.html`
-- `Ui.Button`  → `components/ui/button.html`
-- If the path is a directory, `component.html` inside it is used instead.
-
-### load() vs render()
-
-`load()` and `render()` are intentionally separate steps:
-
-- **`load($component)`** — parses the file, registers all sections, auto-loads parent layout if `<!--extends::-->` is present. Produces no output.
-- **`render($component)`** — includes the compiled output cache. **Does not call `load()`**. Fails with an error if the component has not been loaded yet.
+## Component syntax
 
 ```php
-// Always load before render
-$t->load('Page');   // also auto-loads Layout via <!--extends::Layout-->
-$t->render('Page'); // renders Layout's output cache
+<!--extends::Layouts.App-->
+<!--load::Widgets.Card-->          <!-- declare dep before any section -->
+
+<!--section::style-->
+<style> .hero { padding: 2rem; } </style>
+
+<!--section::output-->
+<h1><?= $this->e($title) ?></h1>         <!-- HTML-escaped echo -->
+<p><?= $rawHtml ?></p>                 <!-- raw echo -->
+
+<?php $x = $someArray['key']; ?>
+
+<?php if ($x > 0): ?>yes<?php else: ?>no<?php endif; ?>
+
+<?php foreach ($items as $i => $v): ?>
+  <li><?= $this->e($v) ?></li>
+<?php endforeach; ?>
+
+<?= $this->render('Widgets.Card') ?>
+<?= $this->render($dynamicName, $myArray) ?>
+<?= $this->slot('content', 'My App') ?>
+<?= $this->block('style', 'css') ?>
+<?= $this->block('style') ?>
 ```
 
-**`<!--load::Dep-->` must come before any `<!--section::...-->`** in the same file. `load()` is blocked when a section is open because the dependency's own `section()` calls would auto-close the currently active section, corrupting the parent's buffer. `<dmv-render component="Dep" />` inside a section is safe — the output cache only echoes HTML and never opens new sections.
+Comment directive forms:
+- `<!--fn::arg-->` → `$this->fn("arg")`
+- `<!--fn::arg1|arg2-->` → `$this->fn("arg1", "arg2")`
+- `<!---dev note--->` → stripped entirely, never reaches cache
 
-```html
-<!--extends::Layout-->
-<!--load::Widgets.Card-->                   ← load all deps first, before any section
-<!--section::content-->
-<dmv-render component="Widgets.Card" />    ← render inside a section is fine
+## Public API
+
+```php
+$t = new Template(
+    path:   'components/',  // component root
+    cache:  '.cache/',      // writable cache dir
+    public: 'public/',      // optional, for asset()
+    url:    '/',            // optional, for asset() URLs
+);
+
+$t->render($component, $data)     // → string, auto-loads
+$t->load($component)              // pre-warm cache (optional)
+$t->slot($name, $default)         // read single section → string
+$t->block($name, $modifier)       // deferred multi-section emit → string (placeholder)
+$t->blockFiles($name, $modifier)  // like block() but passes paths to FileModifierInterface
+$t->inject($html)                 // resolve block() placeholders in $html → string
+$t->e($value)                     // HTML escape → string
+$t->set($key, $value)             // set template variable
+$t->get($key, $default)           // read template variable
+$t->asset($src, $dest)            // copy asset + return URL
+$t->errors()                      // → string[]
+$t->addModifier($key, $modifier)  // register ModifierInterface|FileModifierInterface
 ```
 
-### `ModifierInterface`
+Inside templates, the Template instance is available via `$this`.
 
-Implement `process(array $sections): string` where `$sections` is `['ComponentName' => 'content']`. Register on the `Template` instance via `addModifier(string $key, ModifierInterface)` and reference by key in component files: `<dmv-renderSectionBlock name="style" modifier="css" />`.
+## Component naming → file path
 
-### Component execution scoping
-
-Both execution paths expose the same scope to component code:
-- `$builder` = the `Template` instance
-- any `$data` keys available as local variables (via `extract()` with `EXTR_SKIP`)
-
-**Load phase** (`evalComponent()`): `ContentParser` output is `eval()`'d. Variable names `$builder` and `$data` are the only locals in scope — no `$__` prefixing needed since there is no `include`.
-
-**Render phase** (`executeFile()`): output cache is `include`'d. Variable names `$__file` and `$__data` are deliberately prefixed to prevent collisions with extracted template variables.
+`PascalCase` / dot-separated → lowercase slash-separated:
+- `PageHeader` → `components/page/header.php`
+- `Ui.Button` → `components/ui/button.php`
+- If path is a directory → `components/ui/button/component.php`

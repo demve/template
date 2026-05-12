@@ -12,18 +12,15 @@ require_once __DIR__ . '/CssMinifier.php';
 use Demeve\Template\Template;
 
 $t = new Template(
-    componentsDir: __DIR__ . '/components',
-    cacheDir:      __DIR__ . '/cache'
+    path:  __DIR__ . '/components',
+    cache: __DIR__ . '/cache'
 );
 
 // Register modifiers by key. Component files reference them by name —
 // no PHP class instantiation inside .html files.
 $t->addModifier('css', new CssMinifier());
 
-$t->load('Page');
+// render() automatically calls load() if the component has not been loaded yet.
+echo $t->render('Page');
 
-// Capture the full output so we can show it cleanly in the terminal.
-$html = (string) $t->render('Page', [], return: true);
-
-echo $html;
-$t->consoleErrors();
+$t->logErrores('js');

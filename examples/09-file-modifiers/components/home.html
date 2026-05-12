@@ -1,0 +1,23 @@
+<!--extends::layout-->
+<!--load::header-->
+
+<!--section::content-->
+<?= $this->render('header') ?>
+<main>
+    <p>This is the home page. The CSS and JS are bundled into static files using <code>CssFileModifier</code> and <code>JsFileModifier</code>.</p>
+    <p>Check the source code and the generated files in the <code>public/assets</code> directory.</p>
+</main>
+
+<!--section::css-->
+<style>
+    main p {
+        font-size: 1.1em;
+        line-height: 1.5;
+        color: #0056b3;
+    }
+</style>
+
+<!--section::js-->
+<script>
+    console.log('Home JS initialized');
+</script>

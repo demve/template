@@ -26,7 +26,7 @@ class JsModifier implements ModifierInterface
         return implode("\n", $parts);
     }
 
-    private function minify(string $js, bool $safe = true): string
+    protected function minify(string $js, bool $safe = true): string
     {
         $js = str_replace(["\r\n", "\r"], "\n", $js);
         $len = strlen($js);

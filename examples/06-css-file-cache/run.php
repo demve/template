@@ -14,8 +14,8 @@ require_once __DIR__ . '/CssFileModifier.php';
 use Demeve\Template\Template;
 
 $t = new Template(
-    componentsDir: __DIR__ . '/components',
-    cacheDir:      __DIR__ . '/cache'
+    path:  __DIR__ . '/components',
+    cache: __DIR__ . '/cache'
 );
 
 $t->addModifier('css-file', new CssFileModifier(
@@ -25,7 +25,7 @@ $t->addModifier('css-file', new CssFileModifier(
 
 $t->load('Page');
 
-$html = (string) $t->render('Page', [], return: true);
+$html = (string) $t->render('Page');
 
 echo $html;
-$t->consoleErrors();
+$t->logErrores('js');

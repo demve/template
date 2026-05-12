@@ -3,7 +3,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title><renderSection name="title" default="App" /></title>
+  <title><!--=slot::title|App--></title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body   { font-family: system-ui, sans-serif; background: #f8fafc; color: #1e293b; }
@@ -15,10 +15,10 @@
 
   <!--
     All <style> blocks from every loaded component land here.
-    dmv-renderSectionBlock collects them in load order and outputs them together.
-    Pass a CssMinifier (see example 03) to minify the combined output.
+    block('style') collects them in load order and outputs them together.
+    Pass a modifier key to post-process (e.g. 'css' for minification).
   -->
-  <dmv-renderSectionBlock name="style" />
+  <!--=block::style-->
 
 </head>
 <body>
@@ -35,15 +35,15 @@
     All <script type="text/template"> blocks from every loaded component.
     They are hidden from the user but available to the JS router via getElementById.
   -->
-  <dmv-renderSectionBlock name="template" />
+  <!--=block::template-->
 
   <!--
     All <script> blocks from every loaded component, in load order.
     Each component's JS runs after its template is in the DOM.
   -->
-  <dmv-renderSectionBlock name="script" />
+  <!--=block::script-->
 
-  <dmv-renderSectionBlock name="console_errors" />
+  <!--logErrores::js-->
 
 </body>
 </html>

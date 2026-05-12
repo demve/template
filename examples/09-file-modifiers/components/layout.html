@@ -1,0 +1,37 @@
+<!--section::output-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>File Modifiers Example</title>
+    <!-- We use the files::css modifier and manually write the <link> tag -->
+    <link rel="stylesheet" href="<!--=files::css-->">
+</head>
+<body>
+    <div class="layout">
+        <!--=slot::content-->
+    </div>
+    
+    <!-- We use the files::js modifier and manually write the <script> tag -->
+    <script src="<!--=files::js-->"></script>
+</body>
+</html>
+
+<!--section::css-->
+<style>
+    body {
+        font-family: sans-serif;
+        background: #f0f0f0;
+    }
+    .layout {
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+        background: white;
+    }
+</style>
+
+<!--section::js-->
+<script>
+    console.log('Layout JS initialized');
+</script>

@@ -10,7 +10,7 @@
 <h1>03 – ModifierInterface</h1>
 
 <p>
-  <code>renderSectionBlock()</code> accepts an optional second argument that implements
+  <code>$this->block()</code> accepts an optional second argument that implements
   <code>ModifierInterface</code>. The modifier receives the <em>combined</em> output of
   all items in the section as a single string and returns the processed result.
 </p>
@@ -45,11 +45,11 @@
 $t->addModifier('css', new CssMinifier());
 $t->addModifier('js',  new JsMinifier());</code></pre>
 <pre><code>&lt;!-- layout.html — reference by key, no PHP instantiation in component files --&gt;
-&lt;style&gt;@renderSectionBlock('style', 'css')&lt;/style&gt;
-&lt;script&gt;@renderSectionBlock('script', 'js')&lt;/script&gt;</code></pre>
+&lt;style&gt;&lt;!--=block::style|css--&gt;&lt;/style&gt;
+&lt;script&gt;&lt;!--=block::script|js--&gt;&lt;/script&gt;</code></pre>
 <p>
   The modifier key is a plain string inside the component file.
-  This keeps <code>.html</code> files free of PHP class names and makes it easy to swap
+  This keeps component files free of PHP class names and makes it easy to swap
   implementations (e.g. switch from a regex minifier to a proper parser) without touching templates.
   If the key is not registered the section falls back to a plain <code>implode("\n")</code>.
 </p>
@@ -62,7 +62,7 @@ $t->addModifier('js',  new JsMinifier());</code></pre>
 
 <h2>Other uses</h2>
 <ul>
-  <li>JS bundler / minifier for <code>renderSectionBlock('script')</code></li>
+  <li>JS bundler / minifier for <code>$this->block('script', 'js')</code></li>
   <li>CSS autoprefixer</li>
   <li>Markdown renderer (collect markdown sections, render them all at once)</li>
   <li>Content Security Policy hash generator</li>

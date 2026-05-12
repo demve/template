@@ -13,5 +13,5 @@ interface FileModifierInterface
      *
      * @param array<string, string> $files
      */
-    public function processFiles(array $files): string;
+    public function processFiles(array $files, Template $template): string;
 }

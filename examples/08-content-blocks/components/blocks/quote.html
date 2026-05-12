@@ -6,8 +6,8 @@
 </style>
 <!--section::output-->
 <div class="block-quote">
-  <blockquote><%$cita%></blockquote>
-  <dmv-if test="isset($autor)">
-    <cite>— <%$autor%></cite>
-  </dmv-if>
+  <blockquote><!--=print::cita--></blockquote>
+  <?php if (isset($autor)): ?>
+    <cite>— <!--=print::autor--></cite>
+  <?php endif; ?>
 </div>

@@ -6,8 +6,8 @@
 </style>
 <!--section::output-->
 <figure class="block-image">
-  <img src="<%$src%>" alt="<%$alt ?? ''%>">
-  <dmv-if test="isset($caption)">
-    <figcaption><%$caption%></figcaption>
-  </dmv-if>
+  <img src="<!--=print::src-->" alt="<?= $this->e($alt ?? '') ?>">
+  <?php if (isset($caption)): ?>
+    <figcaption><!--=print::caption--></figcaption>
+  <?php endif; ?>
 </figure>

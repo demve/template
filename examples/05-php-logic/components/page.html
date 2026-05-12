@@ -21,54 +21,56 @@
 <body>
 
 <h2>1. if / elseif / else</h2>
-<dmv-php>$user = $builder->get('user');</dmv-php>
+<?php $user = $this->get('user'); ?>
 <p>
-  Hello, <%$user['name']%>. Role:
-  <dmv-if test="$user['role'] === 'admin'">
+  Hello, <?= $this->e($user['name']) ?>. Role:
+  <?php if ($user['role'] === 'admin'): ?>
     <span class="badge admin">Admin</span>
-  <dmv-elseif test="$user['role'] === 'editor'">
+  <?php elseif ($user['role'] === 'editor'): ?>
     <span class="badge editor">Editor</span>
-  <dmv-else>
+  <?php else: ?>
     <span class="badge guest">Guest</span>
-  </dmv-if>
+  <?php endif; ?>
 </p>
 
 <h2>2. foreach with empty-state guard</h2>
-<dmv-php>$frameworks = $builder->get('frameworks', []);</dmv-php>
-<dmv-if test="count($frameworks) > 0">
+<?php $frameworks = $this->get('frameworks', []); ?>
+<?php if (count($frameworks) > 0): ?>
   <ul>
-    <dmv-foreach on="$frameworks as $i => $name">
-      <li><strong>#<%$i + 1%></strong> — <%$name%></li>
-    </dmv-foreach>
+    <?php foreach ($frameworks as $i => $name): ?>
+      <li><strong>#<?= $this->e($i + 1) ?></strong> — <?= $this->e($name) ?></li>
+    <?php endforeach; ?>
   </ul>
-<dmv-else>
+<?php else: ?>
   <p class="empty">No frameworks found.</p>
-</dmv-if>
+<?php endif; ?>
 
 <h2>2b. same pattern, empty data</h2>
-<dmv-php>$nothing = $builder->get('nothing', []);</dmv-php>
-<dmv-if test="count($nothing) > 0">
+<?php $nothing = $this->get('nothing', []); ?>
+<?php if (count($nothing) > 0): ?>
   <ul>
-    <dmv-foreach on="$nothing as $item"><li><%$item%></li></dmv-foreach>
+    <?php foreach ($nothing as $item): ?>
+      <li><?= $this->e($item) ?></li>
+    <?php endforeach; ?>
   </ul>
-<dmv-else>
+<?php else: ?>
   <p class="empty">No items found.</p>
-</dmv-if>
+<?php endif; ?>
 
 <h2>3. for loop</h2>
 <div class="pills">
-  <dmv-for expr="$i = 1; $i <= $builder->get('count', 5); $i++">
-    <span class="pill">item <%$i%></span>
-  </dmv-for>
+  <?php for ($i = 1; $i <= $this->get('count', 5); $i++): ?>
+    <span class="pill">item <?= $this->e($i) ?></span>
+  <?php endfor; ?>
 </div>
 
 <h2>4. while loop</h2>
-<dmv-php>$n = $builder->get('whileStart', 1);</dmv-php>
+<?php $n = $this->get('whileStart', 1); ?>
 <div class="pills">
-  <dmv-while test="$n <= 5">
-    <span class="pill">tick <%$n%></span>
-    <dmv-php>$n++;</dmv-php>
-  </dmv-while>
+  <?php while ($n <= 5): ?>
+    <span class="pill">tick <?= $this->e($n) ?></span>
+    <?php $n++; ?>
+  <?php endwhile; ?>
 </div>
 
 </body>

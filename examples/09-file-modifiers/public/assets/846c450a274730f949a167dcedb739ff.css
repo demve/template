@@ -1,0 +1,6 @@
+/* layout */
+body{font-family:sans-serif;background:#f0f0f0}.layout{max-width:800px;margin:0 auto;padding:20px;background:white}
+/* header */
+.main-header{border-bottom:2px solid #ccc;margin-bottom:20px;padding-bottom:10px}.main-header h1{color:#333}
+/* home */
+main p{font-size:1.1em;line-height:1.5;color:#0056b3}

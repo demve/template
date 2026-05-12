@@ -20,13 +20,13 @@ class CssFileModifier implements FileModifierInterface
     ) {}
 
     /** @param array<string, string> $files ComponentName => absolute cache file path */
-    public function processFiles(array $files): string
+    public function processFiles(array $files, \Demeve\Template\Template $template): string
     {
         if (file_exists($this->outputFile) && $this->outputFileIsFresh(array_values($files))) {
             return $this->linkTag();
         }
 
-        $css = implode("\n", array_map(fn(string $f): string => (string) file_get_contents($f), $files));
+        $css = implode("\n", array_map(fn(string $f): string => $template->fetchFile($f), $files));
 
         // Strip <style> wrapper tags left by the section capture
         $css = (string) preg_replace('/<\/?style[^>]*>/i', '', $css);

@@ -5,8 +5,8 @@ require_once __DIR__ . '/../../vendor/autoload.php';
 use Demeve\Template\Template;
 
 $t = new Template(
-    componentsDir: __DIR__ . '/components',
-    cacheDir:      __DIR__ . '/cache'
+    path:  __DIR__ . '/components',
+    cache: __DIR__ . '/cache'
 );
 
 $t->set('user',       ['name' => 'Diego', 'role' => 'admin']);
@@ -15,6 +15,7 @@ $t->set('nothing',    []);
 $t->set('count',      6);
 $t->set('whileStart', 1);
 
-$t->load('Page');
-$t->render('Page');
-$t->consoleErrors();
+// render() automatically calls load() if the component has not been loaded yet.
+echo $t->render('Page');
+
+$t->logErrores('js');

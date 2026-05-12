@@ -26,7 +26,7 @@ class CssModifier implements ModifierInterface
         return implode("\n", $parts);
     }
 
-    private function minify(string $css): string
+    protected function minify(string $css): string
     {
         $css = (string) preg_replace('!/\*[^*]*\*+([^/][^*]*\*+)*/!', '', $css);
         $css = str_replace(["\r\n", "\r", "\n", "\t"], ' ', $css);

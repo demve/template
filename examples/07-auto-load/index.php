@@ -11,7 +11,7 @@
 
 <p>
   When a component's <code>output</code> section contains
-  <code>&lt;dmv-render component="Foo" /&gt;</code>, the engine automatically
+  <code>$this->render('Foo')</code>, the engine automatically
   loads <code>Foo</code> during the parent's load phase — no manual
   <code>&lt;!--load::Foo--&gt;</code> required.
 </p>
@@ -24,18 +24,18 @@
 <h2>How it works</h2>
 <ol>
   <li><code>load('Page')</code> compiles Page's output section.</li>
-  <li>Engine scans the compiled cache for <code>$builder->render('Card')</code>.</li>
+  <li>Engine scans the compiled cache for <code>$this->render('Card')</code>.</li>
   <li><code>load('Card')</code> is called — which in turn finds <code>render('Badge')</code> and loads Badge too.</li>
   <li><code>render('Page')</code> executes — Card and Badge are already in scope.</li>
 </ol>
 
-<h2>Component file (card.html)</h2>
+<h2>Component file (card.php)</h2>
 <pre><code>&lt;!--section::style--&gt;
 &lt;style&gt; .card { ... } &lt;/style&gt;
 &lt;!--section::output--&gt;
 &lt;div class="card"&gt;
-  &lt;h3&gt;&lt;%$title%&gt; &lt;dmv-render component="Badge" /&gt;&lt;/h3&gt;
-  &lt;p&gt;&lt;%$body%&gt;&lt;/p&gt;
+  &lt;h3&gt;&lt;?= $this->e($title) ?&gt; &lt;?= $this->render('Badge') ?&gt;&lt;/h3&gt;
+  &lt;p&gt;&lt;?= $this->e($body) ?&gt;&lt;/p&gt;
 &lt;/div&gt;</code></pre>
 
 <p>No <code>&lt;!--load::Badge--&gt;</code> needed — Badge is auto-detected.</p>

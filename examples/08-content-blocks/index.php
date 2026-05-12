@@ -13,12 +13,12 @@
   CMS-style rendering: the component name is a runtime value, not a literal.
   Each block contributes its own <code>section::style</code> — even though those
   components are loaded <em>after</em> the layout's
-  <code>&lt;dmv-renderSectionBlock name="style" /&gt;</code> has already fired.
+  <code>&lt;!--=block::style--&gt;</code> has already fired.
 </p>
 
 <h2>The timing problem</h2>
 <p>
-  In a typical layout, <code>renderSectionBlock('style')</code> runs early
+  In a typical layout, <code>$this->block('style')</code> runs early
   (inside <code>&lt;head&gt;</code>) before the dynamic blocks in
   <code>&lt;body&gt;</code> have been loaded. Without deferred injection the
   blocks' styles would be missing.
@@ -28,19 +28,16 @@
 <ol>
   <li>
     The top-level <code>render()</code> call wraps execution in an output buffer
-    and increments an internal <code>$renderDepth</code> counter.
+    and sets an internal <code>$isRendering</code> flag.
   </li>
   <li>
-    While <code>$renderDepth &gt; 0</code>, <code>renderSectionBlock()</code>
+    While <code>$isRendering</code> is true, <code>$this->block()</code>
     emits an HTML-comment placeholder instead of the real CSS:
-    <code>&lt;!-- __DMV:block:style:__ --&gt;</code>. The same placeholder key
-    is reused for duplicate calls, so the <code>$sectionQueue</code> stays
-    deduplicated.
+    <code>&lt;!-- __DMV:block:style:__ --&gt;</code>.
   </li>
   <li>
-    The <code>&lt;dmv-foreach&gt;</code> / <code>&lt;dmv-render component="$b"&gt;</code>
-    loop runs. Each block is auto-loaded, its <code>style</code> section
-    registered in <code>$sections['style']</code>.
+    The loop runs: <code>&lt;?php foreach ($bloques as $b) echo $this->render($b->componente, $b->data); ?&gt;</code>.
+    Each block is auto-loaded, its <code>style</code> section registered.
   </li>
   <li>
     After the buffer is captured, <code>inject()</code> iterates
@@ -51,31 +48,30 @@
 
 <h2>Variable component name</h2>
 <p>
-  <code>&lt;dmv-render component="$b" /&gt;</code> — when the value starts with
-  <code>$</code>, OutputParser emits a PHP expression instead of a string literal:
+  Since we are in a PHP file, we just pass the variable to the <code>render()</code> method:
 </p>
-<pre><code>&lt;dmv-render component="$bloque-&gt;componente" data="$bloque-&gt;data" /&gt;
-       ↓
-&lt;?php $builder-&gt;render($bloque-&gt;componente, $bloque-&gt;data); ?&gt;</code></pre>
+<pre><code>&lt;?php foreach ($bloques as $bloque): ?&gt;
+  &lt;?= $this->render($bloque->componente, $bloque->data) ?&gt;
+&lt;?php endforeach; ?&gt;</code></pre>
 
 <h2>page.html (output section)</h2>
 <pre><code>&lt;!--section::output--&gt;
 &lt;!DOCTYPE html&gt;
 &lt;html&gt;
 &lt;head&gt;
-  &lt;dmv-renderSectionBlock name="style" /&gt;  &lt;!-- placeholder at render time --&gt;
+  &lt;!--=block::style--&gt;  &lt;!-- placeholder at render time --&gt;
 &lt;/head&gt;
 &lt;body&gt;
-  &lt;dmv-foreach on="$bloques as $bloque"&gt;
-    &lt;dmv-render component="$bloque-&gt;componente" data="$bloque-&gt;data" /&gt;
-  &lt;/dmv-foreach&gt;
+  &lt;?php foreach ($bloques as $bloque): ?&gt;
+    &lt;?= $this->render($bloque->componente, $bloque->data) ?&gt;
+  &lt;?php endforeach; ?&gt;
 &lt;/body&gt;
 &lt;/html&gt;</code></pre>
 
 <h2>run.php</h2>
 <pre><code>$bloques = [ /* array of CMS blocks, shuffled */ ];
 shuffle($bloques);
-$t-&gt;render('Page', ['bloques' =&gt; $bloques]);</code></pre>
+echo $t->render('Page', ['bloques' => $bloques]);</code></pre>
 
 <p>Each reload uses a random subset in a random order — styles are always correct.</p>
 

@@ -4,13 +4,10 @@ declare(strict_types=1);
 
 namespace Demeve\Template;
 
-use Demeve\Template\FileModifierInterface;
 use Demeve\Template\Modifier\CssModifier;
 use Demeve\Template\Modifier\HtmlModifier;
 use Demeve\Template\Modifier\JsModifier;
 use Demeve\Template\Parser\ContentParser;
-use Demeve\Template\Parser\OutputParser;
-use Demeve\Template\Parser\SectionParserInterface;
 
 class Template
 {
@@ -22,50 +19,42 @@ class Template
     /** @var array<string, mixed> */
     private array $params = [];
 
-    /** @var array<string, array<string, string>> sections['sectionKey']['ComponentName'] = '/path/to/cache.php' */
-    private array $sections = ['errors' => []];
+    /** @var array<string, array<string, string>> sections[name][ComponentName] = '/path/to/cache.php' */
+    private array $sections = [];
 
-    /** @var array<string, SectionParserInterface> */
-    private array $sectionParsers = [];
-
-    private ?string $currentSection = null;
+    /** @var array<string> */
+    private array $errors = [];
 
     /** @var array<string, true> */
     private array $loadedComponents = [];
 
-    /** @var array<string, string> extendsMap['Child'] = 'Layout' */
+    /** @var array<string, string> extendsMap[Child] = Layout */
     private array $extendsMap = [];
 
-    private string $currentComponent     = '__root__';
-    private ?string $currentComponentFile = null;
+    private string $currentComponent = '__root__';
 
     /** @var array<string, ModifierInterface|FileModifierInterface> */
     private array $modifiers = [];
 
-    private int $renderDepth = 0;
-
     /** @var array<string, array{type: string, section: string, modifier: string|null}> */
     private array $sectionQueue = [];
 
+    private bool $isRendering = false;
+
     private ContentParser $contentParser;
-    private OutputParser $outputParser;
 
     public function __construct(
-        string $componentsDir,
-        string $cacheDir,
-        ?string $publicDir = null,
-        string $publicUrl = '/',
-        ?ContentParser $contentParser = null,
-        ?OutputParser $outputParser = null
+        string $path,
+        string $cache,
+        ?string $public = null,
+        string $url = '/',
     ) {
-        $this->componentsDir  = rtrim($componentsDir, '/\\');
-        $this->cacheDir       = rtrim($cacheDir, '/\\');
-        $this->publicDir      = $publicDir !== null ? rtrim($publicDir, '/\\') : null;
-        $this->publicUrl      = rtrim($publicUrl, '/');
-        $this->contentParser  = $contentParser ?? new ContentParser();
-        $this->outputParser   = $outputParser  ?? new OutputParser();
-        $this->sectionParsers = ['output' => $this->outputParser];
-        $this->modifiers      = [
+        $this->componentsDir = rtrim($path, '/\\');
+        $this->cacheDir      = rtrim($cache, '/\\');
+        $this->publicDir     = $public !== null ? rtrim($public, '/\\') : null;
+        $this->publicUrl     = rtrim($url, '/');
+        $this->contentParser = new ContentParser();
+        $this->modifiers     = [
             'html' => new HtmlModifier(),
             'css'  => new CssModifier(),
             'js'   => new JsModifier(),
@@ -74,33 +63,8 @@ class Template
     }
 
     // -------------------------------------------------------------------------
-    // Settings (fluent)
+    // Configuration (fluent)
     // -------------------------------------------------------------------------
-
-    public function setComponentsDir(string $dir): static
-    {
-        $this->componentsDir = rtrim($dir, '/\\');
-        return $this;
-    }
-
-    public function setCacheDir(string $dir): static
-    {
-        $this->cacheDir = rtrim($dir, '/\\');
-        $this->ensureCacheDir();
-        return $this;
-    }
-
-    public function setPublicDir(string $dir): static
-    {
-        $this->publicDir = rtrim($dir, '/\\');
-        return $this;
-    }
-
-    public function setPublicUrl(string $url): static
-    {
-        $this->publicUrl = rtrim($url, '/');
-        return $this;
-    }
 
     public function addModifier(string $key, ModifierInterface|FileModifierInterface $modifier): static
     {
@@ -123,135 +87,87 @@ class Template
     }
 
     // -------------------------------------------------------------------------
-    // Section management — called from within component files via $builder
-    // -------------------------------------------------------------------------
-
-    /**
-     * Open a new section capture. If a section is already open it is closed first.
-     * Sections other than "output" get an HTML comment marker for IDE navigation.
-     */
-    public function section(string $name): void
-    {
-        if ($this->currentSection !== null) {
-            $this->sectionStop();
-        }
-        $this->currentSection = $name;
-        ob_start();
-    }
-
-    public function sectionStop(): void
-    {
-        if ($this->currentSection === null) {
-            return;
-        }
-        $content = trim((string) ob_get_clean());
-        $section = $this->currentSection;
-        $this->currentSection = null;
-
-        $parser    = $this->sectionParsers[$section] ?? $this->contentParser;
-        $cacheFile = $this->cacheDir . "/{$this->currentComponent}.{$section}.cache.php";
-        file_put_contents($cacheFile, $parser->compile($content));
-        $this->sections[$section][$this->currentComponent] = $cacheFile;
-    }
-
-    /** @return array<string, string> */
-    public function sectionGet(string $key): array
-    {
-        return $this->sections[$key] ?? [];
-    }
-
-    // -------------------------------------------------------------------------
     // Core API
     // -------------------------------------------------------------------------
 
     /**
-     * Load a component: resolve its path, rebuild the load cache if stale, then
-     * include the cache so the component's section() calls register its sections.
-     * Never outputs anything to the buffer.
+     * Load a component: parse its .php file (if stale), write section caches,
+     * and register its section paths. Never produces output.
      */
-    public function load(string $component, array $data = []): void
+    public function load(string $component): void
     {
         if (isset($this->loadedComponents[$component])) {
             return;
         }
-        if ($this->currentSection !== null) {
-            $section = $this->currentSection;
-            ob_end_clean();
-            $this->currentSection = null;
-            throw new \LogicException(
-                "load('{$component}') called while section '{$section}' is open in '{$this->currentComponent}'. "
-                . "All load() calls must appear before any section() in the same file."
-            );
-        }
 
         $fullPath = $this->resolveComponentPath($component);
         if ($fullPath === null) {
-            $this->sections['errors'][] = "'{$this->currentComponent}' tried to load '{$component}' which does not exist";
+            $this->errors[] = "'{$this->currentComponent}' tried to load '{$component}' which does not exist";
             return;
         }
 
-        // Push context so nested loads restore correctly
-        $parentComponent = $this->currentComponent;
-        $parentFile      = $this->currentComponentFile;
-
-        $this->currentComponent     = $component;
-        $this->currentComponentFile = $this->componentToRelativePath($component);
+        $parentComponent        = $this->currentComponent;
+        $this->currentComponent = $component;
         $this->loadedComponents[$component] = true;
 
         $loadFile = $this->cacheDir . "/{$component}.load.cache.php";
+
         if (!$this->isCacheValid($loadFile, $fullPath)) {
             $this->clearSectionCacheFiles($component);
             $depsBefore = array_keys($this->loadedComponents);
-            $execPhp = $this->contentParser->parse((string) file_get_contents($fullPath), $component);
-            $this->evalComponent($execPhp, $data);
-            $this->sectionStop();
-            $outputCachePath = $this->sections['output'][$component] ?? null;
-            if ($outputCachePath !== null && file_exists($outputCachePath)) {
-                foreach ($this->extractRenderDeps((string) file_get_contents($outputCachePath)) as $dep) {
-                    $this->load($dep, $data);
+
+            $meta = $this->contentParser->parse(
+                (string) file_get_contents($fullPath),
+                $component,
+                $this->cacheDir
+            );
+
+            if ($meta['extends'] !== null) {
+                $this->extendsMap[$component] = $meta['extends'];
+                $this->load($meta['extends']);
+            }
+
+            foreach ($meta['deps'] as $dep) {
+                $this->load($dep);
+            }
+
+            $outputCache = $this->cacheDir . "/{$component}.output.cache.php";
+            if (file_exists($outputCache)) {
+                foreach ($this->extractRenderDeps((string) file_get_contents($outputCache)) as $dep) {
+                    $this->load($dep);
                 }
             }
-            if (isset($this->extendsMap[$component])) {
-                $this->load($this->extendsMap[$component], $data);
-            }
+
             $deps = array_values(array_diff(array_keys($this->loadedComponents), $depsBefore));
-            $this->writeLoadCache($loadFile, $deps, $this->extendsMap[$component] ?? null);
+            $this->writeLoadCache($loadFile, $deps, $meta['extends']);
         } else {
             $cacheData = include $loadFile;
-            if (isset($cacheData['extends'])) {
+            if (!empty($cacheData['extends'])) {
                 $this->extendsMap[$component] = $cacheData['extends'];
             }
             foreach ($cacheData['deps'] as $dep) {
-                $this->load($dep, $data);
+                $this->load($dep);
             }
-            $this->loadSectionPathsFromCache($component);
         }
 
-        // Pop context
-        $this->currentComponent     = $parentComponent;
-        $this->currentComponentFile = $parentFile;
+        $this->loadSectionPathsFromCache($component);
+        $this->currentComponent = $parentComponent;
     }
 
     /**
-     * Render a previously loaded component. Auto-loads if needed.
+     * Render a component to an HTML string. Auto-loads if needed.
      *
-     * At depth 0 (top-level call): wraps execution in an output buffer so that
-     * any renderSectionBlock/renderSectionFiles placeholders emitted by nested
-     * templates are replaced with fully-accumulated section content once all
-     * dynamic loads have completed.
-     *
-     * Pass $return = true to capture the final output instead of echoing it.
+     * The outermost render() call wraps execution in an output buffer so that
+     * block() placeholders emitted during nested renders are resolved with the
+     * fully-accumulated section content once execution completes.
      */
-    public function render(string $component, array $data = [], bool $return = false): ?string
+    public function render(string $component, array $data = []): string
     {
+        $this->load($component);
         if (!isset($this->loadedComponents[$component])) {
-            $this->load($component, $data);
-            if (!isset($this->loadedComponents[$component])) {
-                return null;
-            }
+            return '';
         }
 
-        // Walk up the inheritance chain to find the root layout to render
         $renderTarget = $component;
         while (isset($this->extendsMap[$renderTarget])) {
             $renderTarget = $this->extendsMap[$renderTarget];
@@ -259,251 +175,201 @@ class Template
 
         $outputCache = $this->sections['output'][$renderTarget] ?? null;
         if ($outputCache === null || !file_exists($outputCache)) {
-            return null;
+            return '';
         }
 
-        $isTopLevel = ($this->renderDepth === 0);
+        $isOutermost       = !$this->isRendering;
+        $this->isRendering = true;
 
-        if ($isTopLevel) {
-            ob_start();
-        }
+        $oldParams = $this->params;
+        $this->params = array_merge($this->params, $data);
 
-        $this->renderDepth++;
+        ob_start();
         $this->executeFile($outputCache, $data);
-        $this->renderDepth--;
+        $html = (string) ob_get_clean();
 
-        if ($isTopLevel) {
-            $html = $this->inject((string) ob_get_clean());
+        $this->params = $oldParams;
+
+        if ($isOutermost) {
+            $this->isRendering = false;
+            $html = $this->inject($html);
             $this->sectionQueue = [];
-            if ($return) {
-                return $html;
-            }
-            echo $html;
-            return null;
         }
 
-        return null;
+        return $html;
     }
 
     /**
-     * Replace all deferred section-block placeholders in $html with their
-     * fully-accumulated content. Safe to call manually when render() is not
-     * used as the outer wrapper (e.g., tests that build $html themselves).
+     * Replace all deferred block() placeholders with fully-accumulated content.
+     * Safe to call manually (e.g. in tests that build $html outside render()).
      */
     public function inject(string $html): string
     {
         foreach ($this->sectionQueue as $key => $entry) {
-            $placeholder = "<!-- __DMV:{$key}__ -->";
-            ob_start();
-            if ($entry['type'] === 'files') {
-                $this->renderSectionFilesInline($entry['section'], $entry['modifier']);
-            } else {
-                $this->renderSectionBlockInline($entry['section'], $entry['modifier']);
-            }
-            $html = str_replace($placeholder, (string) ob_get_clean(), $html);
+            $html = str_replace(
+                "<!-- __DMV:{$key}__ -->",
+                $this->resolveBlock($entry),
+                $html
+            );
         }
         return $html;
     }
 
     /**
-     * Render a simple named slot — echoes the section's combined content, or $default
-     * when nothing was registered. Intended for single-value layout slots (title, content…).
+     * Emit all accumulated sections of $name as one block, optionally post-processed
+     * by a modifier. Returns a placeholder string that inject() will replace once
+     * all dynamic child components have finished rendering.
      */
-    public function renderSection(string $section, string $default = ''): void
+    public function block(string $name, ?string $modifier = null): string
     {
-        $items = $this->sectionGet($section);
+        if ($modifier === null && isset($this->modifiers[$name])) {
+            $modifier = $name;
+        }
+        $key = "block:{$name}:{$modifier}";
+        $this->sectionQueue[$key] = ['type' => 'block', 'section' => $name, 'modifier' => $modifier];
+        return "<!-- __DMV:{$key}__ -->";
+    }
+
+    /**
+     * Renders a section block as a list of files for a FileModifierInterface.
+     */
+    public function files(string $name, ?string $modifier = null): string
+    {
+        if ($modifier === null && isset($this->modifiers[$name])) {
+            $modifier = $name;
+        }
+        $key = "files:{$name}:{$modifier}";
+        $this->sectionQueue[$key] = ['type' => 'files', 'section' => $name, 'modifier' => $modifier];
+        return "<!-- __DMV:{$key}__ -->";
+    }
+
+    /**
+     * Like block() but passes file paths to the modifier instead of reading content.
+     * Use with FileModifierInterface for memory-efficient bundlers.
+     */
+    public function blockFiles(string $name, ?string $modifier = null): string
+    {
+        return $this->files($name, $modifier);
+    }
+
+    /**
+     * Return the content of a single named section slot, or $default if nothing
+     * was registered. Intended for layout slots (title, content, …).
+     */
+    public function slot(string $name, string $default = ''): string
+    {
+        $items = $this->sections[$name] ?? [];
         if ($items === []) {
-            echo $default;
-            return;
+            return $default;
         }
-        $parts = [];
-        foreach ($items as $cachePath) {
-            $parts[] = (string) file_get_contents($cachePath);
+        //return implode("\n", array_map('file_get_contents', array_values($items)));
+        ob_start();
+        foreach ($items as $path) {
+            $this->executeFile($path, $this->params);
         }
-        echo implode("\n", $parts);
+        return (string) ob_get_clean();
     }
 
     /**
-     * Render a multi-item block section (CSS, JS, HTML templates, etc.).
-     * Inside a render() call (depth > 0) emits a deferred placeholder so that
-     * sections accumulated by dynamic child renders are included at inject() time.
+     * HTML-escape a value for safe output. Handles null gracefully.
      */
-    public function renderSectionBlock(string $section, ?string $modifierKey = null): void
+    public function e(mixed $value): string
     {
-        if ($section === 'console_errors') {
-            $this->consoleErrors();
-            return;
-        }
-        if ($this->renderDepth > 0) {
-            $key = "block:{$section}:" . ($modifierKey ?? '');
-            $this->sectionQueue[$key] = ['type' => 'block', 'section' => $section, 'modifier' => $modifierKey];
-            echo "<!-- __DMV:{$key}__ -->";
-            return;
-        }
-        $this->renderSectionBlockInline($section, $modifierKey);
+        return htmlspecialchars((string) ($value ?? ''), ENT_QUOTES, 'UTF-8');
     }
-
-    /**
-     * Like renderSectionBlock but passes file paths to the modifier instead of
-     * reading file contents first. Defers to a placeholder inside render() calls.
-     */
-    public function renderSectionFiles(string $section, ?string $modifierKey = null): void
-    {
-        if ($this->renderDepth > 0) {
-            $key = "files:{$section}:" . ($modifierKey ?? '');
-            $this->sectionQueue[$key] = ['type' => 'files', 'section' => $section, 'modifier' => $modifierKey];
-            echo "<!-- __DMV:{$key}__ -->";
-            return;
-        }
-        $this->renderSectionFilesInline($section, $modifierKey);
-    }
-
-    /**
-     * Register that $currentComponent extends $layout.
-     * Called from load-cache files via <!--extends::Layout-->.
-     * Must be called before any section() opens.
-     */
-    public function extends(string $layout): void
-    {
-        if ($this->currentSection !== null) {
-            $this->sections['errors'][] = "'{$this->currentComponent}' called extends() inside an open section '{$this->currentSection}'";
-            return;
-        }
-        $this->extendsMap[$this->currentComponent] = $layout;
-    }
-
-    // -------------------------------------------------------------------------
-    // Assets
-    // -------------------------------------------------------------------------
 
     /**
      * Copy an asset to the public directory (if stale) and return its public URL.
      */
     public function asset(string $source, ?string $destination = null): string
     {
-        $this->copy($source, $destination);
+        if ($this->publicDir !== null) {
+            $srcFile = $this->componentsDir . '/' . ltrim($source, '/');
+            $destRel = $destination ?? $source;
+            $destFile = $this->publicDir . '/' . ltrim($destRel, '/');
+
+            if (file_exists($srcFile) && (!file_exists($destFile) || filemtime($destFile) < filemtime($srcFile))) {
+                $dir = dirname($destFile);
+                if (!is_dir($dir)) {
+                    mkdir($dir, 0777, true);
+                }
+                copy($srcFile, $destFile);
+            }
+        }
         return $this->publicUrl . '/' . ltrim($destination ?? $source, '/');
     }
 
-    /**
-     * Copy $source (relative to componentsDir) to $destination (relative to publicDir).
-     * Skips the copy when the destination is newer than the source.
-     */
-    public function copy(string $source, ?string $destination = null): bool
-    {
-        if ($this->publicDir === null) {
-            $this->sections['errors'][] = "'{$this->currentComponent}' tried to copy '{$source}' without a public dir configured";
-            return false;
-        }
-        $sourceFile = $this->componentsDir . '/' . ltrim($source, '/');
-        if (!file_exists($sourceFile)) {
-            $this->sections['errors'][] = "'{$this->currentComponent}' tried to copy '{$source}' which does not exist";
-            return false;
-        }
-        $dest            = $destination ?? $source;
-        $destinationFile = $this->publicDir . '/' . ltrim($dest, '/');
-
-        if (file_exists($destinationFile) && filemtime($destinationFile) >= filemtime($sourceFile)) {
-            return true;
-        }
-
-        $destinationDir = dirname($destinationFile);
-        if (!is_dir($destinationDir) && !mkdir($destinationDir, 0777, true) && !is_dir($destinationDir)) {
-            $this->sections['errors'][] = "'{$this->currentComponent}' could not create directory for '{$dest}'";
-            return false;
-        }
-
-        return copy($sourceFile, $destinationFile);
-    }
-
-    // -------------------------------------------------------------------------
-    // Template helpers — invoked from component files via comment syntax
-    // e.g. <!--print::myKey--> or <!--switch::myKey|Yes|No-->
-    // -------------------------------------------------------------------------
-
     public function print(string $key, mixed $default = null): void
     {
-        echo $this->get($key, $default);
+        echo $this->e($this->get($key, $default));
     }
 
-    public function switch(string $key, string $true, string $false): void
+    /**
+     * Executes a cache file and returns its captured output.
+     */
+    public function fetchFile(string $path): string
     {
-        echo $this->get($key) ? $true : $false;
+        ob_start();
+        $this->executeFile($path, $this->params);
+        return (string) ob_get_clean();
     }
 
-    // -------------------------------------------------------------------------
-    // Errors
-    // -------------------------------------------------------------------------
-
-    public function consoleErrors(): void
+    /**
+     * Output collected errors in the specified format.
+     */
+    public function logErrores(string $format = 'js'): void
     {
-        if ($this->sections['errors'] === []) {
+        if ($this->errors === []) {
             return;
         }
-        $msg = str_replace('"', "'", implode('@@@', $this->sections['errors']));
-        echo "<script>console.error(\"{$msg}\".split('@@@'));</script>";
+
+        if ($format === 'js') {
+            $json = json_encode($this->errors);
+            echo "<script>console.error('Template Errors:', {$json});</script>";
+        } else {
+            foreach ($this->errors as $error) {
+                echo "[Error] {$error}\n";
+            }
+        }
     }
 
     /** @return array<string> */
-    public function getErrors(): array
+    public function errors(): array
     {
-        return $this->sections['errors'];
-    }
-
-    // -------------------------------------------------------------------------
-    // Private inline renderers (used by public methods and inject())
-    // -------------------------------------------------------------------------
-
-    private function renderSectionBlockInline(string $section, ?string $modifierKey): void
-    {
-        $paths = $this->sectionGet($section);
-        $sections = [];
-        foreach ($paths as $component => $cachePath) {
-            $sections[$component] = (string) file_get_contents($cachePath);
-        }
-        if ($modifierKey !== null && isset($this->modifiers[$modifierKey])) {
-            $modifier = $this->modifiers[$modifierKey];
-            if ($modifier instanceof ModifierInterface) {
-                echo $modifier->process($sections);
-            }
-        } else {
-            echo implode("\n", $sections);
-        }
-    }
-
-    private function renderSectionFilesInline(string $section, ?string $modifierKey): void
-    {
-        $paths = $this->sectionGet($section);
-
-        if ($modifierKey !== null && isset($this->modifiers[$modifierKey])) {
-            $modifier = $this->modifiers[$modifierKey];
-            if ($modifier instanceof FileModifierInterface) {
-                echo $modifier->processFiles($paths);
-                return;
-            }
-            $sections = [];
-            foreach ($paths as $component => $path) {
-                $sections[$component] = (string) file_get_contents($path);
-            }
-            echo $modifier->process($sections);
-            return;
-        }
-
-        $parts = [];
-        foreach ($paths as $path) {
-            $parts[] = (string) file_get_contents($path);
-        }
-        echo implode("\n", $parts);
+        return $this->errors;
     }
 
     // -------------------------------------------------------------------------
     // Private helpers
     // -------------------------------------------------------------------------
 
-    /**
-     * Convert PascalCase component name (with optional dots) to a relative file path.
-     * e.g. "PageHeader" → "/page/header", "Ui.Button" → "/ui/button"
-     */
+    private function resolveBlock(array $entry): string
+    {
+        $paths    = $this->sections[$entry['section']] ?? [];
+        $modifier = $entry['modifier'] !== null ? ($this->modifiers[$entry['modifier']] ?? null) : null;
+
+        if ($entry['type'] === 'files') {
+            if ($modifier instanceof FileModifierInterface) {
+                return $modifier->processFiles($paths, $this);
+            }
+            $contents = [];
+            foreach ($paths as $comp => $path) {
+                $contents[$comp] = $this->fetchFile($path);
+            }
+            return $modifier instanceof ModifierInterface
+                ? $modifier->process($contents)
+                : implode("\n", $contents);
+        }
+
+        $contents = [];
+        foreach ($paths as $comp => $path) {
+            $contents[$comp] = $this->fetchFile($path);
+        }
+        return $modifier instanceof ModifierInterface
+            ? $modifier->process($contents)
+            : implode("\n", $contents);
+    }
+
     private function componentToRelativePath(string $component): string
     {
         $path = str_replace('.', '', $component);
@@ -513,31 +379,24 @@ class Template
 
     private function resolveComponentPath(string $component): ?string
     {
-        $rel     = $this->componentToRelativePath($component);
-        $dirPath = $this->componentsDir . $rel . '/component.html';
-        $filePath = $this->componentsDir . $rel . '.html';
+        $rel      = $this->componentToRelativePath($component);
+        $dirPathPhp  = $this->componentsDir . $rel . '/component.php';
+        $dirPathHtml = $this->componentsDir . $rel . '/component.html';
+        $filePathPhp = $this->componentsDir . $rel . '.php';
+        $filePathHtml = $this->componentsDir . $rel . '.html';
 
-        if (is_dir($this->componentsDir . $rel) && file_exists($dirPath)) {
-            return $dirPath;
+        if (is_dir($this->componentsDir . $rel)) {
+            if (file_exists($dirPathPhp)) return $dirPathPhp;
+            if (file_exists($dirPathHtml)) return $dirPathHtml;
         }
-        if (file_exists($filePath)) {
-            return $filePath;
-        }
+        if (file_exists($filePathPhp)) return $filePathPhp;
+        if (file_exists($filePathHtml)) return $filePathHtml;
         return null;
     }
 
     private function isCacheValid(string $cacheFile, string $sourceFile): bool
     {
         return file_exists($cacheFile) && filemtime($cacheFile) >= filemtime($sourceFile);
-    }
-
-    private function evalComponent(string $phpCode, array $data): void
-    {
-        $builder = $this;
-        if ($data !== []) {
-            extract($data, EXTR_SKIP);
-        }
-        eval('?>' . $phpCode);
     }
 
     private function clearSectionCacheFiles(string $component): void
@@ -559,15 +418,29 @@ class Template
         $suffix = '.cache.php';
         foreach (glob($this->cacheDir . '/' . $component . '.*.cache.php') ?: [] as $file) {
             $inner = substr(basename($file), strlen($prefix), -strlen($suffix));
-            $this->sections[$inner][$component] = $file;
+            if ($inner !== 'load') {
+                $this->sections[$inner][$component] = $file;
+            }
         }
     }
 
     /** @return array<string> */
     private function extractRenderDeps(string $cacheContent): array
     {
-        preg_match_all('/\$builder->render\(\'([^\']+)\'/', $cacheContent, $matches);
+        preg_match_all('/\$this->render\(\'([^\']+)\'/', $cacheContent, $matches);
         return array_unique($matches[1]);
+    }
+
+    /**
+     * Include a cache file with $data keys available as local variables.
+     * The Template instance is available via $this.
+     */
+    private function executeFile(string $__file, array $__data): void
+    {
+        if ($__data !== []) {
+            extract($__data, EXTR_SKIP);
+        }
+        include $__file;
     }
 
     private function ensureCacheDir(): void
@@ -575,21 +448,5 @@ class Template
         if (!is_dir($this->cacheDir)) {
             mkdir($this->cacheDir, 0777, true);
         }
-    }
-
-    /**
-     * Include a cache file in an isolated scope where:
-     *  - $builder = $this (so component files can call $builder->section(), etc.)
-     *  - any $data keys are available as local variables via extract()
-     *
-     * Double-underscore prefixes guard against extract() collisions with template vars.
-     */
-    private function executeFile(string $__file, array $__data): void
-    {
-        if ($__data !== []) {
-            extract($__data, EXTR_SKIP);
-        }
-        $builder = $this;
-        include $__file;
     }
 }

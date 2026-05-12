@@ -14,10 +14,11 @@ require_once __DIR__ . '/../../vendor/autoload.php';
 use Demeve\Template\Template;
 
 $t = new Template(
-    componentsDir: __DIR__ . '/components',
-    cacheDir:      __DIR__ . '/cache'
+    path:  __DIR__ . '/components',
+    cache: __DIR__ . '/cache'
 );
 
-$t->load('App');
-$t->render('App');
-$t->consoleErrors();
+// render() automatically calls load() if the component has not been loaded yet.
+echo $t->render('App');
+
+$t->logErrores('js');

@@ -4,18 +4,14 @@
 <head>
   <meta charset="UTF-8">
 
-  <!--
-    renderSection('title', 'My App') renders the child's "title" section.
-    The second argument is the default shown when no child fills the slot.
-  -->
-  <title><renderSection name="title" default="My App" /></title>
+  <title><!--=slot::title|My App--></title>
 
   <!--
-    renderSectionBlock('style') collects <style> blocks from ALL loaded
+    block('style') collects <style> blocks from ALL loaded
     components and outputs them together — each annotated with its origin.
-    Pass a ModifierInterface to minify (see example 03).
+    Pass a modifier key to post-process (e.g. 'css' for minification).
   -->
-  <renderSectionBlock name="style" />
+  <!--=block::style-->
 
 </head>
 <body>
@@ -24,19 +20,19 @@
 
   <main>
     <!--
-      renderSection('content') is the primary page slot.
+      slot('content') is the primary page slot.
       No default — pages are expected to always fill it.
     -->
-    <renderSection name="content" />
+    <!--=slot::content-->
   </main>
 
-  <renderSectionBlock name="script" />
+  <!--=block::script-->
 
   <!--
     Flush any runtime errors (missing components, bad loads) to the
-    browser console. Remove in production.
+    browser console.
   -->
-  <renderSectionBlock name="console_errors" />
+  <!--logErrores::js-->
 
 </body>
 </html>

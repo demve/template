@@ -11,13 +11,11 @@ require_once __DIR__ . '/../../vendor/autoload.php';
 use Demeve\Template\Template;
 
 $t = new Template(
-    componentsDir: __DIR__ . '/components',
-    cacheDir:      __DIR__ . '/cache'
+    path:  __DIR__ . '/components',
+    cache: __DIR__ . '/cache'
 );
 
-// load() registers PageHome's sections and auto-loads Layout (via <!--extends::Layout-->).
-// render() then includes Layout's output cache — it never auto-loads.
-$t->load('PageHome');
-$t->render('PageHome');
+// render() automatically calls load() if the component has not been loaded yet.
+echo $t->render('PageHome');
 
-$t->consoleErrors();
+$t->logErrores('js');
